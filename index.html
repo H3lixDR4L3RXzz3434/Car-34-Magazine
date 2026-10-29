@@ -166,6 +166,73 @@
       pointer-events: auto;
     }
 
+    /* Pantalla completa (o maximizado): la barra superior y el pie se ocultan y los controles táctiles se muestran */
+    .game-shell:fullscreen,
+    .game-shell.max {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      max-width: none;
+      margin: 0;
+      padding: 0;
+      background: var(--paper);
+      overflow: hidden;
+    }
+    .game-shell.max { position: fixed; inset: 0; z-index: 50; }
+    .game-shell:fullscreen .topbar,
+    .game-shell:fullscreen .footer,
+    .game-shell.max .topbar,
+    .game-shell.max .footer { display: none; }
+    .game-shell:fullscreen .stage,
+    .game-shell.max .stage {
+      flex: 1 1 0;
+      width: 100%;
+      min-height: 0;
+      height: auto;
+      aspect-ratio: auto;
+      border: 0;
+      border-radius: 0;
+    }
+    @media (pointer: coarse) {
+      .game-shell:fullscreen .mobile-controls,
+      .game-shell.max .mobile-controls {
+        display: flex;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+        margin: 0;
+        padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+        gap: 8px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .game-shell:fullscreen .size-row,
+      .game-shell.max .size-row { display: flex; }
+    }
+    .size-row {
+      display: none;
+      width: 100%;
+      order: -1;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .size-btn {
+      min-width: 44px;
+      min-height: 34px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--stage);
+      color: var(--ink);
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .size-btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+    .mobile-controls.size-s .round { width: 52px; height: 52px; }
+    .mobile-controls.size-m .round { width: 64px; height: 64px; }
+    .mobile-controls.size-l .round { width: 80px; height: 80px; }
+
     .round {
       width: 64px;
       height: 64px;
@@ -814,7 +881,12 @@
       <div class="iris" id="iris" aria-hidden="true"></div>
     </section>
 
-    <div class="mobile-controls" aria-label="Controles táctiles">
+    <div class="mobile-controls size-m" aria-label="Controles táctiles">
+      <div class="size-row" role="group" aria-label="Tamaño de botones">
+        <button class="size-btn" type="button" data-size="s" aria-pressed="false">S</button>
+        <button class="size-btn" type="button" data-size="m" aria-pressed="true">M</button>
+        <button class="size-btn" type="button" data-size="l" aria-pressed="false">L</button>
+      </div>
       <div class="group">
         <button id="leftButton" class="round" type="button" aria-label="Mover a la izquierda">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6M20 6l-6 6 6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -2468,7 +2540,24 @@
       }));
       document.querySelector("#settingsClose").addEventListener("click", () => { settingsPanel.hidden = true; });
 
-      const fsRoot = document.querySelector(".stage");
+      // Tamaño de los botones táctiles (S, M, L), guardado en el navegador
+      const mobileControls = document.querySelector(".mobile-controls");
+      function applyButtonSize(size) {
+        mobileControls.classList.remove("size-s", "size-m", "size-l");
+        mobileControls.classList.add("size-" + size);
+        document.querySelectorAll(".size-btn").forEach((btn) => {
+          btn.setAttribute("aria-pressed", String(btn.dataset.size === size));
+        });
+        try { localStorage.setItem("car34-btnsize", size); } catch (error) { /* sin almacenamiento */ }
+      }
+      let savedSize = "m";
+      try { savedSize = localStorage.getItem("car34-btnsize") || "m"; } catch (error) { savedSize = "m"; }
+      applyButtonSize(["s", "m", "l"].includes(savedSize) ? savedSize : "m");
+      document.querySelectorAll(".size-btn").forEach((btn) => {
+        btn.addEventListener("click", () => applyButtonSize(btn.dataset.size));
+      });
+
+      const fsRoot = document.querySelector(".game-shell");
       const fsButton = document.querySelector("#fsButton");
       const fsRequest = fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen;
       const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
