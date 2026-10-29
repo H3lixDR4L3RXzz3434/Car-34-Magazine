@@ -150,11 +150,11 @@
 
     .mobile-controls {
       display: none;
-      position: absolute;
-      inset: auto 14px 14px;
+      position: relative;
+      margin-top: 12px;
       justify-content: space-between;
       align-items: flex-end;
-      pointer-events: none;
+      pointer-events: auto;
       user-select: none;
       -webkit-user-select: none;
     }
@@ -698,28 +698,6 @@
           <svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="0" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="7.5" y="0" width="3.5" height="12" rx="1" fill="currentColor"/></svg>
         </button>
       </div>
-      <div class="mobile-controls" aria-label="Controles táctiles">
-        <div class="group">
-          <button id="leftButton" class="round" type="button" aria-label="Mover a la izquierda">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6M20 6l-6 6 6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button id="rightButton" class="round" type="button" aria-label="Mover a la derecha">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6M4 6l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
-        <div class="group">
-          <button id="goButton" class="round go" type="button" aria-label="Ir" aria-pressed="false" hidden>IR</button>
-          <button id="hornButton" class="round horn" type="button" aria-label="Mantener para tocar el pito" title="Mantener para tocar el pito">
-            <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-              <path d="M5 13h8l12-6v18l-12-6H5z" fill="currentColor"/>
-              <path d="M10 19l2 8h5l-3-7M28 11l2-2M29 16h3M28 21l2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button id="jumpButton" class="round jump" type="button" aria-label="Saltar">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 14.5 12 8.5l6 6" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
-      </div>
       <div class="overlay" id="overlay">
         <div class="intro">
           <p class="eyebrow" id="eyebrow">Pequeño viaje, gran aventura</p>
@@ -835,6 +813,29 @@
       </div>
       <div class="iris" id="iris" aria-hidden="true"></div>
     </section>
+
+    <div class="mobile-controls" aria-label="Controles táctiles">
+      <div class="group">
+        <button id="leftButton" class="round" type="button" aria-label="Mover a la izquierda">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6M20 6l-6 6 6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="rightButton" class="round" type="button" aria-label="Mover a la derecha">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6M4 6l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="group">
+        <button id="goButton" class="round go" type="button" aria-label="Ir" aria-pressed="false" hidden>IR</button>
+        <button id="hornButton" class="round horn" type="button" aria-label="Mantener para tocar el pito" title="Mantener para tocar el pito">
+          <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <path d="M5 13h8l12-6v18l-12-6H5z" fill="currentColor"/>
+            <path d="M10 19l2 8h5l-3-7M28 11l2-2M29 16h3M28 21l2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button id="jumpButton" class="round jump" type="button" aria-label="Saltar">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 14.5 12 8.5l6 6" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
 
     <footer class="footer">
       <span>← → MOVER <b>·</b> ESPACIO / ↑ SALTAR <b>·</b> MANTÉN P PARA EL PITO</span>
