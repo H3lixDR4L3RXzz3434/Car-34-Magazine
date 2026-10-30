@@ -709,8 +709,6 @@
       .heart.lost, #deathOverlay .lose { animation: none; }
     }
     .hearts { color: #e5484d; letter-spacing: 2px; }
-    .round.go { width: 56px; height: 56px; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
-    .round.go[aria-pressed="true"] { background: #2fb8a6; border-color: #fff; }
 
     .shop { margin-top: 22px; }
 
@@ -1009,7 +1007,6 @@
         </button>
       </div>
       <div class="group">
-        <button id="goButton" class="round go" type="button" aria-label="Ir" aria-pressed="false" hidden>IR</button>
         <button id="hornButton" class="round horn" type="button" aria-label="Mantener para tocar el pito" title="Mantener para tocar el pito">
           <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <path d="M5 13h8l12-6v18l-12-6H5z" fill="currentColor"/>
@@ -1112,14 +1109,12 @@
 
       // Objetos del nivel: cajas con potenciadores escondidos, enemigos y pinchos
       let objects = [];
-      const powers = { speed: 0, high: 0, fly: 0, double: 0, airJumps: 0, shield: false };
-      const pointer = { x: 0, y: 0, active: false };
-      let goTap = false;
+      const powers = { speed: 0, high: 0, double: 0, airJumps: 0, shield: false };
       let hearts = 5;
       let hurtTimer = 0;
       let introTimer = 0;
       let lastHearts = 5;
-      const powerColors = { speed: "#f2c14e", high: "#2fb8a6", fly: "#9b73d4", shield: "#4a7fd6", double: "#e877a6" };
+      const powerColors = { speed: "#f2c14e", high: "#2fb8a6", shield: "#4a7fd6", double: "#e877a6" };
 
       // El carrito cae desde arriba al empezar un nivel, con un rebote suave
       function introOffset() {
@@ -1147,20 +1142,18 @@
           if (i >= text.length) clearInterval(typeTimer);
         }, 28);
       }
-      const powerNames = { speed: "RÁPIDO", high: "SALTO ALTO", fly: "VUELO", double: "DOBLE SALTO", shield: "ESCUDO" };
+      const powerNames = { speed: "RÁPIDO", high: "SALTO ALTO", double: "DOBLE SALTO", shield: "ESCUDO" };
 
       function resetPowers() {
         powers.speed = 0;
         powers.high = 0;
-        powers.fly = 0;
         powers.double = 0;
         powers.airJumps = 0;
         powers.shield = false;
-        goTap = false;
       }
 
       function pickPower() {
-        const kinds = ["speed", "high", "fly", "shield", "double"];
+        const kinds = ["speed", "high", "shield", "double"];
         return kinds[Math.floor(levelRand() * kinds.length)];
       }
 
@@ -1168,7 +1161,6 @@
         playTone(620, 0.14, "sine", 0.1, 980);
         if (kind === "speed") powers.speed = 300;
         if (kind === "high") powers.high = 360;
-        if (kind === "fly") powers.fly = 480;
         if (kind === "shield") powers.shield = true;
         if (kind === "double") {
           powers.double = 600;
@@ -1187,30 +1179,9 @@
         }
       }
 
-      // Vuelo: el carrito apunta hacia el puntero; W (o el botón IR en celular) lo hace avanzar
-      function flightSteer() {
-        const cx = car.x + car.width / 2;
-        const cy = car.y + car.height / 2;
-        const tx = pointer.active ? pointer.x + camera : cx + 100;
-        const ty = pointer.active ? pointer.y : cy;
-        const dx = tx - cx;
-        const dy = ty - cy;
-        const dist = Math.hypot(dx, dy) || 1;
-        const forward = keys.has("KeyW") || goTap;
-        const speed = powers.speed > 0 ? 7 : 5;
-        if (forward && dist > 12) {
-          car.vx += ((dx / dist) * speed - car.vx) * 0.12;
-          car.vy += ((dy / dist) * speed - car.vy) * 0.12;
-        } else {
-          car.vx *= 0.9;
-          car.vy *= 0.9;
-        }
-      }
-
       function powerStep() {
         if (powers.speed > 0) powers.speed--;
         if (powers.high > 0) powers.high--;
-        if (powers.fly > 0) powers.fly--;
         if (powers.double > 0) powers.double--;
         if (hurtTimer > 0) hurtTimer--;
         if (introTimer > 0) introTimer--;
@@ -1226,11 +1197,9 @@
         const parts = [];
         if (powers.speed > 0) parts.push(`${powerNames.speed} ${Math.ceil(powers.speed / 60)}s`);
         if (powers.high > 0) parts.push(`${powerNames.high} ${Math.ceil(powers.high / 60)}s`);
-        if (powers.fly > 0) parts.push(`${powerNames.fly} ${Math.ceil(powers.fly / 60)}s`);
         if (powers.double > 0) parts.push(`${powerNames.double} ${Math.ceil(powers.double / 60)}s`);
         if (powers.shield) parts.push(powerNames.shield);
         powerLabel.textContent = parts.join(" · ");
-        goButton.hidden = !(powers.fly > 0);
       }
 
       // Mueve enemigos, recoge cajas y revisa choques. Devuelve true si el carrito choca
@@ -1370,7 +1339,7 @@
           wMin: Math.max(80, 190 - n * 11),
           wRange: Math.max(30, 70 - n * 4),
           yJit: Math.min(50 + n * 5, 100),
-          crateChance: 0.45,
+          crateChance: 0.12,
           enemyChance: n >= 2 ? Math.min(0.4, 0.1 + n * 0.03) : 0,
           spikeChance: n >= 2 ? Math.min(0.3, 0.08 + n * 0.02) : 0,
           highChance: n >= 2 ? Math.min(0.25, 0.04 + n * 0.02) : 0
@@ -1385,10 +1354,10 @@
           let nextY = Math.max(height * .43, Math.min(height - 75, last.y + (Math.random() * 2 * lp.yJit - lp.yJit)));
           let high = false;
           if (goalX !== null && Math.random() < lp.highChance && last.y - height * 0.2 >= 130) {
-            // Plataforma alta: la caja anterior trae salto alto o vuelo para llegar
+            // Plataforma alta: la caja anterior trae salto alto para llegar
             nextY = Math.max(height * .2, last.y - (140 + Math.random() * 30));
             high = true;
-            objects.push({ type: "crate", kind: Math.random() < 0.5 ? "high" : "fly", x: last.x + last.width * 0.8 - 14, y: last.y - 28, w: 28, h: 28, taken: false });
+            objects.push({ type: "crate", kind: "high", x: last.x + last.width * 0.8 - 14, y: last.y - 28, w: 28, h: 28, taken: false });
           }
           if (goalX !== null && nextX >= goalX) {
             goalPlatform = makePlatform(nextX, nextY, 420);
@@ -1520,7 +1489,7 @@
       }
 
       function jump() {
-        if (!(running || demo) || paused || powers.fly > 0) return;
+        if (!(running || demo) || paused) return;
         if (car.grounded) {
           car.vy = powers.high > 0 ? -17 : -12.2;
           car.grounded = false;
@@ -2440,11 +2409,7 @@
         wheelAngle += car.vx / 5.6;
         car.squash *= 0.78;
         car.stretch *= 0.82;
-        if (powers.fly > 0) {
-          flightSteer();
-        } else {
-          car.vy += gravity;
-        }
+        car.vy += gravity;
         const previousBottom = car.y + car.height;
         car.y += car.vy;
         car.grounded = false;
@@ -2730,19 +2695,6 @@
       document.querySelector("#pauseButton").addEventListener("click", togglePause);
       const powerLabel = document.querySelector("#powerLabel");
       const heartsLabel = document.querySelector("#hearts");
-      const goButton = document.querySelector("#goButton");
-      goButton.addEventListener("click", () => {
-        goTap = !goTap;
-        goButton.setAttribute("aria-pressed", String(goTap));
-      });
-      const setPointer = (event) => {
-        const r = canvas.getBoundingClientRect();
-        pointer.x = event.clientX - r.left;
-        pointer.y = event.clientY - r.top;
-        pointer.active = true;
-      };
-      canvas.addEventListener("pointermove", setPointer);
-      canvas.addEventListener("pointerdown", setPointer);
       const lightsButton = document.querySelector("#lightsButton");
       lightsButton.addEventListener("click", () => {
         lightsOn = !lightsOn;
@@ -2932,7 +2884,7 @@
       window.addEventListener("keydown", (event) => {
         if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyP"].includes(event.code)) event.preventDefault();
         keys.add(event.code);
-        if (event.code === "Space" || event.code === "ArrowUp" || event.code === "KeyW") jump();
+        if (event.code === "Space" || event.code === "ArrowUp") jump();
         if (event.code === "KeyP") startHorn();
         if (event.code === "Escape") togglePause();
         if (event.code === "KeyF" && !event.repeat) lightsButton.click();
