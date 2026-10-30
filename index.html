@@ -1538,12 +1538,12 @@
         while (!levelDone && platforms[platforms.length - 1].x < untilX) {
           const last = platforms[platforms.length - 1];
           const lp = levelParams();
-          const nextX = last.x + last.width + lp.gapMin + Math.random() * lp.gapRange;
-          let nextY = Math.max(height * .43, Math.min(height - 75, last.y + (Math.random() * 2 * lp.yJit - lp.yJit)));
+          const nextX = last.x + last.width + lp.gapMin + levelRand() * lp.gapRange;
+          let nextY = Math.max(height * .43, Math.min(height - 75, last.y + (levelRand() * 2 * lp.yJit - lp.yJit)));
           let high = false;
-          if (goalX !== null && Math.random() < lp.highChance && last.y - height * 0.2 >= 130) {
+          if (goalX !== null && levelRand() < lp.highChance && last.y - height * 0.2 >= 130) {
             // Plataforma alta: la caja anterior trae salto alto para llegar
-            nextY = Math.max(height * .2, last.y - (140 + Math.random() * 30));
+            nextY = Math.max(height * .2, last.y - (140 + levelRand() * 30));
             high = true;
             objects.push({ type: "crate", kind: "high", x: last.x + last.width * 0.8 - 14, y: last.y - 28, w: 28, h: 28, taken: false });
           }
@@ -1553,7 +1553,7 @@
             levelDone = true;
             break;
           }
-          const plat = makePlatform(nextX, nextY, lp.wMin + Math.random() * lp.wRange);
+          const plat = makePlatform(nextX, nextY, lp.wMin + levelRand() * lp.wRange);
           plat.high = high;
           platforms.push(plat);
           if (goalX !== null) populate(plat, lp);
