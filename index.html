@@ -1538,8 +1538,9 @@
       }
 
       // ===== Bosspalooza: cosechador gigante que persigue al carrito =====
-      const BOSS_W = 210;
-      const BOSS_H = 150;
+      const BOSS_SCALE = 1.22;
+      const BOSS_W = Math.round(210 * BOSS_SCALE);
+      const BOSS_H = Math.round(150 * BOSS_SCALE);
       let bossMode = false;
       let bossBest = 0;
       try { bossBest = Number(localStorage.getItem("car34-boss-best") || 0) || 0; } catch (error) { bossBest = 0; }
@@ -1555,7 +1556,7 @@
       }
       function stepBoss() {
         bossTime++;
-        boss.speed = Math.min(4.3, 2.8 + bossTime * 0.0003);
+        boss.speed = Math.min(4.6, 3.2 + bossTime * 0.0003);
         boss.x += boss.speed;
         const center = car.x + car.width / 2;
         const under = platforms.find((p) => center >= p.x && center <= p.x + p.width);
@@ -1565,52 +1566,57 @@
         const bossTop = boss.groundY - BOSS_H;
         return front > car.x + 8 && car.y + car.height > bossTop + 12;
       }
+      // Cosechador dibujado en coordenadas locales (sin escalar) y escalado con BOSS_SCALE
       function drawBoss() {
-        const x = boss.x - camera;
-        const g = boss.groundY;
-        const top = g - BOSS_H;
-        groundShadow(x + BOSS_W / 2, g + 4, 110);
-        for (const wx of [x + 46, x + BOSS_W - 52]) {
-          context.fillStyle = "#1f2328";
+        const bx = boss.x - camera;
+        const gy = boss.groundY;
+        const top = -150;
+        context.save();
+        context.translate(bx, gy);
+        context.scale(BOSS_SCALE, BOSS_SCALE);
+        groundShadow(105, 4, 110);
+        for (const wx of [46, 158]) {
+          context.fillStyle = "#14090a";
           context.beginPath();
-          context.arc(wx, g - 30, 30, 0, Math.PI * 2);
+          context.arc(wx, -30, 30, 0, Math.PI * 2);
           context.fill();
-          context.strokeStyle = "#7a818a";
+          context.strokeStyle = "#5a3b3b";
           context.lineWidth = 4;
           for (let i = 0; i < 4; i++) {
             const a = wheelAngle * 1.2 + (i * Math.PI) / 2;
             context.beginPath();
-            context.moveTo(wx, g - 30);
-            context.lineTo(wx + Math.cos(a) * 24, g - 30 + Math.sin(a) * 24);
+            context.moveTo(wx, -30);
+            context.lineTo(wx + Math.cos(a) * 24, -30 + Math.sin(a) * 24);
             context.stroke();
           }
-          context.fillStyle = "#c9ced6";
+          context.fillStyle = "#6e5353";
           context.beginPath();
-          context.arc(wx, g - 30, 7, 0, Math.PI * 2);
+          context.arc(wx, -30, 7, 0, Math.PI * 2);
           context.fill();
         }
         context.lineWidth = 1;
-        context.fillStyle = "#d7261e";
+        context.fillStyle = "#8f1712";
         context.beginPath();
-        context.roundRect(x + 6, top + 62, BOSS_W - 30, g - top - 102, 10);
+        context.roundRect(6, top + 62, 180, 48, 10);
         context.fill();
-        context.fillStyle = "#b51b15";
+        context.fillStyle = "#5c0d0a";
         context.beginPath();
-        context.roundRect(x + 14, top + 6, 86, 64, 12);
+        context.roundRect(14, top + 6, 86, 64, 12);
         context.fill();
-        context.fillStyle = "#a8e2ff";
+        context.fillStyle = "#2b1417";
         context.beginPath();
-        context.roundRect(x + 24, top + 16, 56, 30, 6);
+        context.roundRect(24, top + 16, 56, 30, 6);
         context.fill();
-        const mouthX = x + BOSS_W - 56;
-        const mouthH = g - top - 52;
-        context.fillStyle = "#ffd23f";
+        // Cabezal con tambor giratorio: la boca que se come la pista
+        const mouthX = 154;
+        const mouthH = -top - 52;
+        context.fillStyle = "#c9a21c";
         context.beginPath();
         context.roundRect(mouthX, top + 30, 62, mouthH, 10);
         context.fill();
         const cx = mouthX + 31;
         const cy = top + 30 + mouthH / 2;
-        context.strokeStyle = "#8a5a00";
+        context.strokeStyle = "#6b4a08";
         context.lineWidth = 5;
         for (let i = 0; i < 4; i++) {
           const a = bossTime * 0.35 + (i * Math.PI) / 2;
@@ -1620,16 +1626,83 @@
           context.stroke();
         }
         context.lineWidth = 1;
-        context.fillStyle = "#fff";
+        context.fillStyle = "#e9e4d8";
         for (let i = 0; i < 4; i++) {
           const tx = mouthX + 6 + i * 14;
           context.beginPath();
-          context.moveTo(tx, g - 40);
-          context.lineTo(tx + 7, g - 26);
-          context.lineTo(tx + 14, g - 40);
+          context.moveTo(tx, -40);
+          context.lineTo(tx + 7, -26);
+          context.lineTo(tx + 14, -40);
+          context.fill();
+        }
+        context.restore();
+      }
+
+      // Oscuridad de la escena nocturna con la linterna del carro
+      const bossLight = document.createElement("canvas");
+      const bossLightCtx = bossLight.getContext("2d");
+      function drawBossDarkness() {
+        const cnv = context.canvas;
+        if (bossLight.width !== cnv.width || bossLight.height !== cnv.height) {
+          bossLight.width = cnv.width;
+          bossLight.height = cnv.height;
+        }
+        const lc = bossLightCtx;
+        const k = context.getTransform().a;
+        lc.setTransform(1, 0, 0, 1, 0, 0);
+        lc.clearRect(0, 0, bossLight.width, bossLight.height);
+        lc.setTransform(k, 0, 0, k, 0, 0);
+        lc.globalCompositeOperation = "source-over";
+        lc.fillStyle = "rgba(2, 3, 10, .96)";
+        lc.fillRect(0, 0, width, height);
+        lc.globalCompositeOperation = "destination-out";
+        const hx = car.x - camera + car.width / 2;
+        const hy = car.y + car.height / 2 - 4;
+        const glow = lc.createRadialGradient(hx, hy, 10, hx, hy, 140);
+        glow.addColorStop(0, "rgba(0,0,0,1)");
+        glow.addColorStop(0.6, "rgba(0,0,0,.8)");
+        glow.addColorStop(1, "rgba(0,0,0,0)");
+        lc.fillStyle = glow;
+        lc.fillRect(0, 0, width, height);
+        const beam = lc.createLinearGradient(hx, hy, hx + 480, hy);
+        beam.addColorStop(0, "rgba(0,0,0,1)");
+        beam.addColorStop(1, "rgba(0,0,0,0)");
+        lc.fillStyle = beam;
+        lc.beginPath();
+        lc.moveTo(hx, hy - 6);
+        lc.lineTo(hx + 480, hy - 130);
+        lc.lineTo(hx + 480, hy + 130);
+        lc.lineTo(hx, hy + 6);
+        lc.closePath();
+        lc.fill();
+        lc.globalCompositeOperation = "source-over";
+        context.save();
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.drawImage(bossLight, 0, 0);
+        context.restore();
+      }
+
+      // Ojos rojos del cosechador, encima de la oscuridad
+      function drawBossEyes() {
+        const bx = boss.x - camera;
+        for (const ex of [40, 66]) {
+          const x = bx + ex * BOSS_SCALE;
+          const y = boss.groundY - 118 * BOSS_SCALE;
+          const g = context.createRadialGradient(x, y, 0, x, y, 16 * BOSS_SCALE);
+          g.addColorStop(0, "rgba(255, 70, 50, 1)");
+          g.addColorStop(0.35, "rgba(255, 30, 20, .6)");
+          g.addColorStop(1, "rgba(255, 0, 0, 0)");
+          context.fillStyle = g;
+          context.beginPath();
+          context.arc(x, y, 16 * BOSS_SCALE, 0, Math.PI * 2);
+          context.fill();
+          context.fillStyle = "#ffe0d0";
+          context.beginPath();
+          context.arc(x, y, 3, 0, Math.PI * 2);
           context.fill();
         }
       }
+
       function startBoss() {
         selectLevel(0);
         bossMode = true;
@@ -2792,6 +2865,10 @@
           drawCar();
         }
         context.restore();
+        if (bossMode && !demo) {
+          drawBossDarkness();
+          drawBossEyes();
+        }
       }
 
       function frame() {
