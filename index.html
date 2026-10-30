@@ -844,7 +844,7 @@
           <button id="startButton" class="play-btn" type="button" aria-label="Empezar a jugar" title="Empezar a jugar">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6v12l8.5-6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
           </button>
-          <button id="shopButton" class="secondary levels-btn" type="button">Tienda</button>
+          <button id="shopButton" class="secondary levels-btn" type="button">Variedades</button>
           <p class="coin-total" id="coinTotal"></p>
         </div>
       </div>
@@ -915,8 +915,8 @@
       </div>
       <div class="overlay" id="shopPanel" hidden>
         <div class="intro shop-intro">
-          <p class="eyebrow">Tienda</p>
-          <h1>TIENDA<span>.</span></h1>
+          <p class="eyebrow">Variedades</p>
+          <h1>VARIEDADES<span>.</span></h1>
           <p class="coin-total" id="shopCoins"></p>
           <div class="tabs">
             <button id="tabModels" class="tab" type="button" aria-pressed="true">Modelos</button>
@@ -1183,13 +1183,13 @@
         { id: "ahorrador", name: "Ahorrador", desc: "Ten 500 monedas a la vez." },
         { id: "kilometro", name: "Kilómetro", desc: "Llega a 1000 m en modo infinito." },
         { id: "llave_maestra", name: "Llave maestra", desc: "Entra a un nivel con una llave de práctica." },
-        { id: "cristofer", name: "Cristofer 😂", desc: "Muere 7 veces seguidas." }
+        { id: "cristofer", name: "Cristofer 😂", desc: "Cae al vacío 7 veces seguidas al inicio del nivel 1." }
       ];
       let achieved = [];
       try {
         achieved = JSON.parse(localStorage.getItem("car34-achievements") || "[]").filter((id) => ACHIEVEMENTS.some((a) => a.id === id));
       } catch (error) { achieved = []; }
-      let deathStreak = 0;
+      let voidStreak = 0;
       const achToast = document.createElement("div");
       achToast.className = "ach-toast";
       achToast.setAttribute("role", "status");
@@ -1565,7 +1565,7 @@
         frame();
       }
 
-      function endGame() {
+      function endGame(byVoid = false) {
         stopRainSound();
         running = false;
         paused = false;
@@ -1574,8 +1574,12 @@
         document.querySelector("#hornButton").disabled = true;
         best = Math.max(best, Math.floor(distance));
         if (!demo) {
-          deathStreak++;
-          if (deathStreak >= 7) unlockAchievement("cristofer");
+          if (byVoid && selectedLevel === 1 && Math.floor(distance) < 50) {
+            voidStreak++;
+            if (voidStreak >= 7) unlockAchievement("cristofer");
+          } else {
+            voidStreak = 0;
+          }
           if (selectedLevel === 0 && Math.floor(distance) >= 1000) unlockAchievement("kilometro");
         }
         localStorage.setItem("car34-best", String(best));
@@ -2517,7 +2521,7 @@
         gearButton.hidden = true;
         const n = selectedLevel;
         const practice = practiceLevel > 0;
-        deathStreak = 0;
+        voidStreak = 0;
         if (!practice) {
           if (n === 1) unlockAchievement("primer_paso");
           if (n >= 25) unlockAchievement("medio_camino");
@@ -2744,7 +2748,7 @@
           } else {
             draw();
             redFilter.classList.add("on");
-            endGame();
+            endGame(true);
             return;
           }
         }
