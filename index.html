@@ -1139,6 +1139,9 @@
       const platforms = [];
       let width = 0;
       let height = 0;
+      // Altura lógica fija del mundo: así la pista es igual en cualquier ventana
+      const WORLD_H = 720;
+      let worldOffsetY = 0;
       let running = false;
       let demo = false;
       let paused = false;
@@ -1500,6 +1503,7 @@
         const scale = window.devicePixelRatio || 1;
         width = bounds.width;
         height = bounds.height;
+        worldOffsetY = height - WORLD_H;
         canvas.width = Math.round(width * scale);
         canvas.height = Math.round(height * scale);
         context.setTransform(scale, 0, 0, scale, 0, 0);
@@ -1539,11 +1543,11 @@
           const last = platforms[platforms.length - 1];
           const lp = levelParams();
           const nextX = last.x + last.width + lp.gapMin + levelRand() * lp.gapRange;
-          let nextY = Math.max(height * .43, Math.min(height - 75, last.y + (levelRand() * 2 * lp.yJit - lp.yJit)));
+          let nextY = Math.max(WORLD_H * .43, Math.min(WORLD_H - 75, last.y + (levelRand() * 2 * lp.yJit - lp.yJit)));
           let high = false;
-          if (goalX !== null && levelRand() < lp.highChance && last.y - height * 0.2 >= 130) {
+          if (goalX !== null && levelRand() < lp.highChance && last.y - WORLD_H * 0.2 >= 130) {
             // Plataforma alta: la caja anterior trae salto alto para llegar
-            nextY = Math.max(height * .2, last.y - (140 + levelRand() * 30));
+            nextY = Math.max(WORLD_H * .2, last.y - (140 + levelRand() * 30));
             high = true;
             objects.push({ type: "crate", kind: "high", x: last.x + last.width * 0.8 - 14, y: last.y - 28, w: 28, h: 28, taken: false });
           }
@@ -1696,7 +1700,7 @@
         lc.fillRect(0, 0, width, height);
         lc.globalCompositeOperation = "destination-out";
         const hx = car.x - camera + car.width / 2;
-        const hy = car.y + car.height / 2 - 4;
+        const hy = car.y + car.height / 2 - 4 + worldOffsetY;
         const glow = lc.createRadialGradient(hx, hy, 10, hx, hy, 140);
         glow.addColorStop(0, "rgba(0,0,0,1)");
         glow.addColorStop(0.6, "rgba(0,0,0,.8)");
@@ -1726,7 +1730,7 @@
         const bx = boss.x - camera;
         for (const ex of [40, 66]) {
           const x = bx + ex * BOSS_SCALE;
-          const y = boss.groundY - 118 * BOSS_SCALE;
+          const y = boss.groundY + worldOffsetY - 118 * BOSS_SCALE;
           const g = context.createRadialGradient(x, y, 0, x, y, 16 * BOSS_SCALE);
           g.addColorStop(0, "rgba(255, 70, 50, 1)");
           g.addColorStop(0.35, "rgba(255, 30, 20, .6)");
@@ -1835,10 +1839,10 @@
         dust.length = 0;
         trail.length = 0;
         car = createCar();
-        car.y = height - 90;
+        car.y = WORLD_H - 90;
         car.grounded = true;
         platforms.length = 0;
-        platforms.push(makePlatform(28, height - 47, Math.max(220, width * .38)));
+        platforms.push(makePlatform(28, WORLD_H - 47, Math.max(220, (mp.inRound ? 0 : width) * .38)));
         goalPlatform = null;
         levelDone = false;
         objects = [];
@@ -2738,7 +2742,7 @@
             leader.grounded = true;
           }
         }
-        if (leader.y > height + 80) resetLeader();
+        if (leader.y > WORLD_H + 80) resetLeader();
       }
 
       // Señales del nivel 1 (tutorial): fondo crema, flecha naranja y letras negras
@@ -2969,6 +2973,8 @@
 
       function draw() {
         drawBackground();
+        context.save();
+        context.translate(0, worldOffsetY);
         for (const platform of platforms) {
           const x = platform.x - camera;
           if (x + platform.width < 0 || x > width) continue;
@@ -2985,7 +2991,10 @@
           context.shadowBlur = 0;
           context.shadowOffsetY = 0;
         }
+        context.save();
+        context.translate(0, -worldOffsetY);
         drawRain();
+        context.restore();
         drawHonkMarks();
         for (const d of dust) {
           context.globalAlpha = d.color ? d.life : d.life * 0.35;
@@ -3020,6 +3029,7 @@
         } else {
           drawCar();
         }
+        context.restore();
         context.restore();
         if (bossMode && !demo) {
           drawBossDarkness();
@@ -3146,7 +3156,7 @@
           if (d.life <= 0) dust.splice(i, 1);
         }
 
-        if (car.y > height + 80) {
+        if (car.y > WORLD_H + 80) {
           if (demo) {
             resetGame();
             prefillTrail();
