@@ -1515,7 +1515,7 @@
       }
 
       function levelParams() {
-        const n = demo ? 0 : selectedLevel;
+        const n = demo ? 0 : (mp.inRound ? MP_TRACKS[mp.track || 0].level : selectedLevel);
         if (!n) return { n: 0, gapMin: 48, gapRange: 62, wMin: 95, wRange: 75, yJit: 55, crateChance: 0, enemyChance: 0, spikeChance: 0, highChance: 0 };
         return {
           gapMin: Math.min(44 + n * 3, 80),
@@ -1828,7 +1828,7 @@
       }
 
       function resetGame() {
-        levelRand = mp.inRound && mp.seed !== null ? mulberry32(mp.seed) : Math.random;
+        levelRand = mp.inRound ? mulberry32(MP_TRACKS[mp.track || 0].seed) : Math.random;
         camera = 0;
         distance = 0;
         wheelAngle = 0;
@@ -3746,6 +3746,13 @@
       // ===== Multijugador por sala (código de 4 caracteres, hasta 4 jugadores) =====
       // Pega aquí la URL y la clave "anon" de tu proyecto de Supabase cuando la tengas.
       const MP_CONFIG = { url: "https://kvslzyevsuwuwhbwjdwk.supabase.co", anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2c2x6eWV2c3V3dXdoYndqZHdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMTk2NjUsImV4cCI6MjEwODg5NTY2NX0.4PtAfA4GxCUHd8VsJYhXuU9D3jLyF59R512qpz5lMN0" };
+      // Pistas fijas para multijugador: cada una tiene su semilla y su dificultad
+      const MP_TRACKS = [
+        { name: "Pista 1", seed: 1101, level: 1 },
+        { name: "Pista 2", seed: 2202, level: 6 },
+        { name: "Pista 3", seed: 3303, level: 14 },
+        { name: "Pista 4", seed: 4404, level: 25 }
+      ];
       const MP_LEVEL = 1;
       const MP_MAX = 4;
       // Generador de niveles: con semilla en multijugador (todos ven el mismo nivel), aleatorio en lo demás
@@ -3876,6 +3883,7 @@
         const payload = {
           type: "start",
           seed: Math.floor(Math.random() * 1e9),
+          track: Math.floor(Math.random() * MP_TRACKS.length),
           mode: mpSelectedMode(),
           ids: [...mp.roster.keys()].slice(0, MP_MAX)
         };
@@ -3888,6 +3896,7 @@
         mp.counting = true;
         mp.mode = e.mode;
         mp.seed = e.seed;
+        mp.track = typeof e.track === "number" ? e.track : 0;
         mp.players = e.ids.slice();
         mp.finished = new Set();
         mp.dead = new Set();
@@ -3919,7 +3928,7 @@
         mp.inRound = true;
         selectLevel(MP_LEVEL);
         startGame();
-        levelLabel.textContent = mp.mode === "coop" ? "COOPERATIVO" : "CARRERA";
+        levelLabel.textContent = (mp.mode === "coop" ? "COOPERATIVO" : "CARRERA") + " · " + MP_TRACKS[mp.track || 0].name;
       }
 
       function mpOnEvent(e) {
