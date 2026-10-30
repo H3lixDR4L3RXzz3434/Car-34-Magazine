@@ -737,6 +737,34 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { transition-duration: .01ms !important; }
     }
+    .mp-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 8px 0; }
+    .mp-row input {
+      font: inherit;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--stage);
+      color: var(--ink);
+      width: 150px;
+      text-transform: uppercase;
+    }
+    .mp-roster { list-style: none; padding: 0; margin: 6px 0; color: var(--muted); font-size: 14px; }
+    .mp-roster li { padding: 3px 0; }
+    .mp-countdown {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: clamp(60px, 14vw, 120px);
+      font-weight: 800;
+      color: var(--ink);
+      background: rgba(245, 242, 234, .45);
+      pointer-events: none;
+      z-index: 5;
+    }
+    body.dark .mp-countdown { background: rgba(8, 12, 31, .45); }
+    .mp-countdown[hidden] { display: none; }
+
   </style>
 </head>
 <body>
@@ -831,6 +859,10 @@
               <span class="mode-title">Infinito</span>
               <span class="mode-desc">Corre sin fin y bate tu récord</span>
             </button>
+            <button id="modeMulti" class="mode-card" type="button">
+              <span class="mode-title">Multijugador</span>
+              <span class="mode-desc">Hasta 4 jugadores con código de sala</span>
+            </button>
           </div>
           <div class="actions shop">
             <button id="modeClose" class="secondary" type="button">Cerrar</button>
@@ -878,6 +910,44 @@
           </div>
         </div>
       </div>
+      <div class="overlay" id="mpPanel" hidden>
+        <div class="intro">
+          <p class="eyebrow" id="mpCodeLabel"></p>
+          <h1>MULTI<span>.</span></h1>
+          <p class="description" id="mpStatus">Crea una sala o únete con un código.</p>
+          <div class="mp-row">
+            <input id="mpName" maxlength="12" placeholder="Tu nombre" aria-label="Tu nombre">
+          </div>
+          <div class="mp-row">
+            <button id="mpCreate" type="button">Crear sala</button>
+          </div>
+          <div class="mp-row">
+            <input id="mpCode" maxlength="4" placeholder="CÓDIGO" aria-label="Código de sala">
+            <button id="mpJoin" class="secondary" type="button">Unirse</button>
+          </div>
+          <div class="mp-row">
+            <button id="mpModeRace" class="model-chip" type="button" aria-pressed="true">Carrera</button>
+            <button id="mpModeCoop" class="model-chip" type="button" aria-pressed="false">Cooperativo</button>
+          </div>
+          <ul id="mpRoster" class="mp-roster"></ul>
+          <div class="actions">
+            <button id="mpStart" type="button" disabled>Empezar</button>
+            <button id="mpLeave" class="secondary" type="button">Salir</button>
+          </div>
+        </div>
+      </div>
+      <div class="overlay" id="mpResult" hidden>
+        <div class="intro">
+          <p class="eyebrow" id="mpResultEyebrow">Carrera</p>
+          <h1 id="mpResultTitle">PERDISTE.</h1>
+          <p class="description" id="mpResultText"></p>
+          <div class="actions">
+            <button id="mpAgain" type="button">Otra ronda</button>
+            <button id="mpResultMenu" class="secondary" type="button">Menú</button>
+          </div>
+        </div>
+      </div>
+      <div class="mp-countdown" id="mpCountdown" hidden></div>
       <div class="iris" id="iris" aria-hidden="true"></div>
     </section>
 
@@ -915,6 +985,7 @@
     </footer>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script>
     (() => {
       const canvas = document.querySelector("#game");
@@ -950,6 +1021,25 @@
       let demo = false;
       let paused = false;
       let animationFrame = 0;
+      // Estado de multijugador y generador de niveles (se declaran antes de usarse)
+      const mp = {
+        id: Math.random().toString(36).slice(2, 10),
+        channel: null,
+        code: "",
+        roster: new Map(),
+        remote: new Map(),
+        inRound: false,
+        counting: false,
+        roundOver: false,
+        spectating: false,
+        mode: "race",
+        seed: null,
+        players: [],
+        finished: new Set(),
+        dead: new Set(),
+        lastSend: 0
+      };
+      let levelRand = Math.random;
       let camera = 0;
       let distance = 0;
       let wheelAngle = 0;
@@ -998,7 +1088,7 @@
       // Partículas de colores al abrir una caja
       function spawnBurst(x, y, color) {
         for (let i = 0; i < 14; i++) {
-          dust.push({ x, y, vx: Math.random() * 6 - 3, vy: -Math.random() * 5 - 1, life: 1, color });
+          dust.push({ x, y, vx: levelRand() * 6 - 3, vy: -levelRand() * 5 - 1, life: 1, color });
         }
       }
 
@@ -1028,7 +1118,7 @@
 
       function pickPower() {
         const kinds = ["speed", "high", "fly", "shield", "double"];
-        return kinds[Math.floor(Math.random() * kinds.length)];
+        return kinds[Math.floor(levelRand() * kinds.length)];
       }
 
       function grantPower(kind) {
@@ -1044,12 +1134,12 @@
       }
 
       function populate(plat, lp) {
-        if (Math.random() < lp.crateChance) {
+        if (levelRand() < lp.crateChance) {
           objects.push({ type: "crate", kind: pickPower(), x: plat.x + plat.width * 0.8 - 14, y: plat.y - 28, w: 28, h: 28, taken: false });
         }
-        if (lp.enemyChance && plat.width >= 140 && Math.random() < lp.enemyChance) {
+        if (lp.enemyChance && plat.width >= 140 && levelRand() < lp.enemyChance) {
           objects.push({ type: "enemy", x: plat.x + plat.width * 0.3, y: plat.y - 22, w: 30, h: 22, minX: plat.x + 4, maxX: plat.x + plat.width - 34, dir: 1, speed: 0.6 + lp.n * 0.12, dead: false, taken: false });
-        } else if (lp.spikeChance && plat.width >= 100 && Math.random() < lp.spikeChance) {
+        } else if (lp.spikeChance && plat.width >= 100 && levelRand() < lp.spikeChance) {
           objects.push({ type: "spikes", x: plat.x + plat.width * 0.5, y: plat.y - 9, w: 22, h: 9, dead: false, taken: false });
         }
       }
@@ -1196,10 +1286,10 @@
       };
       let theme = themes.light;
       const stars = Array.from({ length: 70 }, () => ({
-        x: Math.random(),
-        y: Math.random() * 0.75,
-        r: 0.4 + Math.random() * 1.2,
-        a: 0.5 + Math.random() * 0.5,
+        x: levelRand(),
+        y: levelRand() * 0.75,
+        r: 0.4 + levelRand() * 1.2,
+        a: 0.5 + levelRand() * 0.5,
         p: Math.random() * 6
       }));
       let best = Number(localStorage.getItem("car34-best") || 0);
@@ -1272,6 +1362,7 @@
       }
 
       function resetGame() {
+        levelRand = mp.inRound && mp.seed !== null ? mulberry32(mp.seed) : Math.random;
         camera = 0;
         distance = 0;
         wheelAngle = 0;
@@ -1369,6 +1460,7 @@
       }
 
       function showMenu() {
+        if (mp.channel) mpLeave();
         cancelAnimationFrame(animationFrame);
         running = false;
         paused = false;
@@ -2152,9 +2244,12 @@
         drawWorkshop();
         drawSigns();
         drawRacers();
+        drawRemoteCars();
         context.save();
         context.translate(0, introOffset());
-        if (hurtTimer > 0) {
+        if (mp.spectating) {
+          // Ya no estás en la pista: solo ves a los demás
+        } else if (hurtTimer > 0) {
           // Al recibir daño: el carrito se pone rojo y tiembla
           const savedColor = carColor;
           context.save();
@@ -2171,6 +2266,10 @@
 
       function frame() {
         if (paused || (!running && !demo)) return;
+        if (mp.inRound && mp.spectating) {
+          mpSpectateFrame();
+          return;
+        }
         if (demo && car.grounded && autopilotShouldJump()) jump();
         const move = demo ? 1 : (keys.has("ArrowRight") || keys.has("KeyD") ? 1 : 0) - (keys.has("ArrowLeft") || keys.has("KeyA") ? 1 : 0);
         car.vx += move * .55;
@@ -2208,11 +2307,34 @@
 
         powerStep();
         if (!demo && stepObjects()) {
+          if (mp.inRound) {
+            mpLocalOut();
+            mpKeepGoing();
+            return;
+          }
           redFilter.classList.add("on");
           endGame();
           return;
         }
 
+        if (mp.inRound && running && !mp.spectating && mp.channel) {
+          const now = performance.now();
+          if (now - mp.lastSend > 60) {
+            mp.lastSend = now;
+            mp.channel.send({
+              type: "broadcast",
+              event: "pos",
+              payload: {
+                id: mp.id,
+                x: Math.round(car.x * 10) / 10,
+                y: Math.round(car.y * 10) / 10,
+                vx: Math.round(car.vx * 100) / 100,
+                vy: Math.round(car.vy * 100) / 100,
+                g: car.grounded ? 1 : 0
+              }
+            });
+          }
+        }
         camera = Math.max(camera, car.x - width * .32);
         distance = Math.max(0, (car.x - 90) / 10);
         scoreLabel.textContent = Math.floor(distance);
@@ -2220,6 +2342,11 @@
         extendPlatforms(camera + width + 220);
 
         if (!demo && goalPlatform && car.x + car.width > goalPlatform.x + 230) {
+          if (mp.inRound) {
+            mpLocalFinish();
+            mpKeepGoing();
+            return;
+          }
           irisTransition(completeLevel);
           return;
         }
@@ -2244,6 +2371,10 @@
             resetGame();
             prefillTrail();
             resetLeader();
+          } else if (mp.inRound) {
+            mpLocalOut();
+            mpKeepGoing();
+            return;
           } else {
             draw();
             redFilter.classList.add("on");
@@ -2650,6 +2781,379 @@
         event.preventDefault();
         jump();
       });
+
+      // ===== Multijugador por sala (código de 4 caracteres, hasta 4 jugadores) =====
+      // Pega aquí la URL y la clave "anon" de tu proyecto de Supabase cuando la tengas.
+      const MP_CONFIG = { url: "", anonKey: "" };
+      const MP_LEVEL = 1;
+      const MP_MAX = 4;
+      // Generador de niveles: con semilla en multijugador (todos ven el mismo nivel), aleatorio en lo demás
+      const mpPanel = document.querySelector("#mpPanel");
+      const mpResult = document.querySelector("#mpResult");
+      const mpCountdown = document.querySelector("#mpCountdown");
+      const mpStatus = document.querySelector("#mpStatus");
+      const mpRosterList = document.querySelector("#mpRoster");
+      const mpStartButton = document.querySelector("#mpStart");
+      const mpCodeLabel = document.querySelector("#mpCodeLabel");
+      const mpModeRace = document.querySelector("#mpModeRace");
+      const mpModeCoop = document.querySelector("#mpModeCoop");
+      let mpClientInstance = null;
+
+      function mulberry32(seed) {
+        let a = seed >>> 0;
+        return function () {
+          a = (a + 0x6D2B79F5) | 0;
+          let t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function mpClient() {
+        if (mpClientInstance) return mpClientInstance;
+        if (!window.supabase || !MP_CONFIG.url || !MP_CONFIG.anonKey) return null;
+        try {
+          mpClientInstance = window.supabase.createClient(MP_CONFIG.url, MP_CONFIG.anonKey);
+        } catch (error) {
+          mpClientInstance = null;
+        }
+        return mpClientInstance;
+      }
+
+      function mpSetStatus(text) { mpStatus.textContent = text; }
+      function mpName(id) { return (mp.roster.get(id) || {}).name || "Alguien"; }
+      function mpHostId() { return [...mp.roster.keys()].sort()[0]; }
+      function mpSelectedMode() { return mpModeCoop.getAttribute("aria-pressed") === "true" ? "coop" : "race"; }
+      function mpGenCode() {
+        const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        let code = "";
+        for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+        return code;
+      }
+      function mpPickMode(mode) {
+        mpModeRace.setAttribute("aria-pressed", String(mode === "race"));
+        mpModeCoop.setAttribute("aria-pressed", String(mode === "coop"));
+      }
+      mpModeRace.addEventListener("click", () => mpPickMode("race"));
+      mpModeCoop.addEventListener("click", () => mpPickMode("coop"));
+
+      function mpSend(payload) {
+        if (mp.channel) mp.channel.send({ type: "broadcast", event: "ev", payload });
+      }
+
+      function mpLeave() {
+        if (mp.channel) {
+          try { mp.channel.unsubscribe(); } catch (error) { /* ya estaba cerrado */ }
+        }
+        mp.channel = null;
+        mp.code = "";
+        mpCodeLabel.textContent = "";
+        mp.roster.clear();
+        mp.remote.clear();
+        mp.inRound = false;
+        mp.counting = false;
+        mp.roundOver = false;
+        mp.spectating = false;
+      }
+
+      function mpJoin(code) {
+        const client = mpClient();
+        if (!client) {
+          mpSetStatus("Falta conectar Supabase: pon la URL y la clave en MP_CONFIG.");
+          return;
+        }
+        mpLeave();
+        mp.code = code;
+        const name = (document.querySelector("#mpName").value.trim() || "Jugador").slice(0, 12);
+        mpCodeLabel.textContent = `Sala ${code}`;
+        mpSetStatus("Conectando...");
+        const channel = client.channel(`car34-${code}`, { config: { broadcast: { self: false }, presence: { key: mp.id } } });
+        mp.channel = channel;
+        channel
+          .on("broadcast", { event: "pos" }, ({ payload }) => mpOnPos(payload))
+          .on("broadcast", { event: "ev" }, ({ payload }) => mpOnEvent(payload))
+          .on("presence", { event: "sync" }, () => mpSyncRoster())
+          .subscribe(async (status) => {
+            if (status === "SUBSCRIBED") {
+              await channel.track({ id: mp.id, name, color: carColors.indexOf(carColor), model: carModel });
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              mpSetStatus("No se pudo conectar a la sala. Revisa la configuración de Supabase.");
+            }
+          });
+      }
+
+      function mpSyncRoster() {
+        if (!mp.channel) return;
+        const state = mp.channel.presenceState();
+        mp.roster.clear();
+        for (const key of Object.keys(state)) {
+          const meta = state[key] && state[key][0];
+          if (meta) mp.roster.set(meta.id, meta);
+        }
+        mpRosterList.innerHTML = "";
+        for (const [id, meta] of mp.roster) {
+          const li = document.createElement("li");
+          li.textContent = meta.name + (id === mp.id ? " (tú)" : "");
+          mpRosterList.appendChild(li);
+        }
+        const isHost = mpHostId() === mp.id;
+        mpStartButton.disabled = !isHost || mp.counting || mp.inRound;
+        mpStartButton.title = isHost ? "" : "Solo el anfitrión puede empezar";
+        mpSetStatus(`${mp.roster.size} de ${MP_MAX} jugadores en la sala${isHost ? "" : " · el anfitrión decide cuándo empezar"}`);
+        for (const id of [...mp.remote.keys()]) {
+          if (!mp.roster.has(id)) mp.remote.delete(id);
+        }
+        if (mp.inRound && !mp.roundOver) {
+          for (const id of mp.players) {
+            if (id !== mp.id && !mp.roster.has(id)) mpRemoteDead(id, "se desconectó");
+          }
+        }
+      }
+
+      mpStartButton.addEventListener("click", () => {
+        if (!mp.channel || mpHostId() !== mp.id || mp.counting || mp.inRound) return;
+        const payload = {
+          type: "start",
+          seed: Math.floor(Math.random() * 1e9),
+          mode: mpSelectedMode(),
+          ids: [...mp.roster.keys()].slice(0, MP_MAX)
+        };
+        mpSend(payload);
+        mpBeginRound(payload);
+      });
+
+      function mpBeginRound(e) {
+        if (mp.inRound || mp.counting) return;
+        mp.counting = true;
+        mp.mode = e.mode;
+        mp.seed = e.seed;
+        mp.players = e.ids.slice();
+        mp.finished = new Set();
+        mp.dead = new Set();
+        mp.remote = new Map();
+        mp.roundOver = false;
+        mp.spectating = false;
+        overlay.hidden = true;
+        modePanel.hidden = true;
+        mpPanel.hidden = true;
+        mpResult.hidden = true;
+        mpCountdown.hidden = false;
+        let n = 3;
+        mpCountdown.textContent = String(n);
+        const tick = setInterval(() => {
+          n -= 1;
+          if (n > 0) {
+            mpCountdown.textContent = String(n);
+            return;
+          }
+          clearInterval(tick);
+          mpCountdown.textContent = "¡YA!";
+          setTimeout(mpStartRound, 500);
+        }, 800);
+      }
+
+      function mpStartRound() {
+        mpCountdown.hidden = true;
+        mp.counting = false;
+        mp.inRound = true;
+        selectLevel(MP_LEVEL);
+        startGame();
+        levelLabel.textContent = mp.mode === "coop" ? "COOPERATIVO" : "CARRERA";
+      }
+
+      function mpOnEvent(e) {
+        if (e.type === "start") {
+          if (!mp.inRound && !mp.counting && e.ids.includes(mp.id)) mpBeginRound(e);
+          return;
+        }
+        if (!mp.inRound || mp.roundOver) return;
+        if (e.type === "finish") mpRemoteFinish(e.id);
+        if (e.type === "dead") mpRemoteDead(e.id, "cayó");
+      }
+
+      function mpOnPos(p) {
+        if (!mp.inRound || p.id === mp.id) return;
+        let buf = mp.remote.get(p.id);
+        if (!buf) {
+          buf = [];
+          mp.remote.set(p.id, buf);
+        }
+        const now = performance.now();
+        buf.push({ t: now, x: p.x, y: p.y, vx: p.vx, vy: p.vy, g: p.g });
+        while (buf.length > 2 && now - buf[0].t > 1000) buf.shift();
+      }
+
+      // Posición del jugador remoto con 120 ms de retraso para interpolar; si no llegan datos, se extrapola con su velocidad
+      function mpRemotePos(id) {
+        const buf = mp.remote.get(id);
+        if (!buf || !buf.length) return null;
+        const renderT = performance.now() - 120;
+        let a = null;
+        let b = null;
+        for (let i = buf.length - 1; i >= 0; i--) {
+          if (buf[i].t <= renderT) {
+            a = buf[i];
+            b = buf[i + 1] || null;
+            break;
+          }
+        }
+        if (!a) return buf[0];
+        if (b) {
+          const k = (renderT - a.t) / Math.max(1, b.t - a.t);
+          return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, vx: a.vx, vy: a.vy, g: a.g };
+        }
+        const frames = Math.min((renderT - a.t) / 1000, 0.25) * 60;
+        return { x: a.x + a.vx * frames, y: a.y + a.vy * frames, vx: a.vx, vy: a.vy, g: a.g };
+      }
+
+      function drawRemoteCars() {
+        if (!mp.inRound && !mp.roundOver) return;
+        for (const id of mp.players) {
+          if (id === mp.id || mp.dead.has(id) || mp.finished.has(id)) continue;
+          const meta = mp.roster.get(id);
+          const p = mpRemotePos(id);
+          if (!meta || !p) continue;
+          const ghost = { x: p.x, y: p.y, vx: p.vx, vy: p.vy, grounded: !!p.g, width: 46, height: 27, squash: 0, stretch: 0 };
+          const saved = { car, carColor, carModel };
+          car = ghost;
+          carColor = carColors[meta.color] || carColors[0];
+          carModel = meta.model || "auto";
+          drawCar();
+          car = saved.car;
+          carColor = saved.carColor;
+          carModel = saved.carModel;
+          const cx = ghost.x - camera + ghost.width / 2;
+          context.save();
+          context.font = "bold 12px system-ui, sans-serif";
+          context.textAlign = "center";
+          context.lineWidth = 3;
+          context.strokeStyle = "rgba(255, 255, 255, .85)";
+          context.strokeText(meta.name, cx, ghost.y - 10);
+          context.fillStyle = "#242621";
+          context.fillText(meta.name, cx, ghost.y - 10);
+          context.restore();
+        }
+      }
+
+      function mpRemoteFinish(id) {
+        if (!mp.players.includes(id) || mp.finished.has(id) || mp.dead.has(id)) return;
+        mp.finished.add(id);
+        if (mp.mode === "race") endRound(false, `${mpName(id)} llegó primero a la meta.`);
+        else mpCheckCoop();
+      }
+
+      function mpRemoteDead(id, reason) {
+        if (!mp.inRound || mp.roundOver || !mp.players.includes(id) || mp.dead.has(id) || mp.finished.has(id)) return;
+        mp.dead.add(id);
+        if (mp.mode === "coop") endRound(false, `${mpName(id)} ${reason}. El equipo perdió.`);
+        else mpCheckRaceOut();
+      }
+
+      function mpCheckRaceOut() {
+        if (mp.mode !== "race" || mp.roundOver) return;
+        if (mp.players.every((id) => mp.dead.has(id) || mp.finished.has(id))) endRound(false, "Nadie llegó a la meta.");
+      }
+
+      function mpCheckCoop() {
+        if (mp.mode !== "coop" || mp.roundOver) return;
+        if (mp.players.every((id) => mp.finished.has(id))) endRound(true, "¡Todos llegaron a la meta!");
+      }
+
+      // Tu carro cae o choca: en carrera sigues como espectador; en cooperativo el equipo pierde
+      function mpLocalOut() {
+        if (mp.spectating || mp.roundOver) return;
+        mp.dead.add(mp.id);
+        mpSend({ type: "dead", id: mp.id });
+        if (mp.mode === "coop") {
+          endRound(false, "Te caíste. El equipo perdió.");
+          return;
+        }
+        mp.spectating = true;
+        mpCheckRaceOut();
+      }
+
+      function mpLocalFinish() {
+        if (mp.spectating || mp.roundOver) return;
+        mp.finished.add(mp.id);
+        mpSend({ type: "finish", id: mp.id });
+        if (mp.mode === "race") {
+          endRound(true, "Llegaste primero a la meta.");
+          return;
+        }
+        mp.spectating = true;
+        mpCheckCoop();
+      }
+
+      function endRound(win, text) {
+        if (mp.roundOver) return;
+        mp.roundOver = true;
+        mp.inRound = false;
+        mp.spectating = false;
+        running = false;
+        paused = false;
+        stopHorn();
+        hud.hidden = true;
+        document.querySelector("#hornButton").disabled = true;
+        const title = document.querySelector("#mpResultTitle");
+        title.textContent = win ? "¡GANASTE!" : "PERDISTE.";
+        title.className = win ? "" : "lose";
+        redFilter.classList.toggle("on", !win);
+        document.querySelector("#mpResultEyebrow").textContent = mp.mode === "coop" ? "Cooperativo" : "Carrera";
+        document.querySelector("#mpResultText").textContent = text;
+        mpResult.hidden = false;
+      }
+
+      function mpKeepGoing() {
+        draw();
+        animationFrame = requestAnimationFrame(frame);
+      }
+
+      // Mientras miras (ya caíste o llegaste), la cámara sigue al carro más adelantado
+      function mpSpectateFrame() {
+        let lead = null;
+        for (const id of mp.players) {
+          if (id === mp.id || mp.dead.has(id) || mp.finished.has(id)) continue;
+          const p = mpRemotePos(id);
+          if (p && (!lead || p.x > lead.x)) lead = p;
+        }
+        if (lead) camera = Math.max(0, lead.x - width * .32);
+        extendPlatforms(camera + width + 220);
+        draw();
+        animationFrame = requestAnimationFrame(frame);
+      }
+
+      document.querySelector("#modeMulti").addEventListener("click", () => {
+        modePanel.hidden = true;
+        mpPanel.hidden = false;
+        mpStartButton.disabled = true;
+        if (!mp.code) mpSetStatus("Crea una sala o únete con un código.");
+      });
+      document.querySelector("#mpCreate").addEventListener("click", () => mpJoin(mpGenCode()));
+      document.querySelector("#mpJoin").addEventListener("click", () => {
+        const code = document.querySelector("#mpCode").value.trim().toUpperCase();
+        if (code.length !== 4) {
+          mpSetStatus("El código tiene 4 letras o números.");
+          return;
+        }
+        mpJoin(code);
+      });
+      document.querySelector("#mpLeave").addEventListener("click", () => {
+        mpLeave();
+        mpPanel.hidden = true;
+        modePanel.hidden = false;
+      });
+      document.querySelector("#mpAgain").addEventListener("click", () => {
+        mpResult.hidden = true;
+        mpPanel.hidden = false;
+        mpSyncRoster();
+      });
+      document.querySelector("#mpResultMenu").addEventListener("click", () => {
+        mpLeave();
+        mpResult.hidden = true;
+        redFilter.classList.remove("on");
+        showMenu();
+      });
+
 
       bestLabel.textContent = best;
       resize();
