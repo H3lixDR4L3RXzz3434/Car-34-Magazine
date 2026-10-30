@@ -1277,7 +1277,7 @@
       // Partículas de colores al abrir una caja
       function spawnBurst(x, y, color) {
         for (let i = 0; i < 14; i++) {
-          dust.push({ x, y, vx: levelRand() * 6 - 3, vy: -levelRand() * 5 - 1, life: 1, color });
+          dust.push({ x, y, vx: Math.random() * 6 - 3, vy: -Math.random() * 5 - 1, life: 1, color });
         }
       }
 
@@ -1482,10 +1482,10 @@
       };
       let theme = themes.light;
       const stars = Array.from({ length: 70 }, () => ({
-        x: levelRand(),
-        y: levelRand() * 0.75,
-        r: 0.4 + levelRand() * 1.2,
-        a: 0.5 + levelRand() * 0.5,
+        x: Math.random(),
+        y: Math.random() * 0.75,
+        r: 0.4 + Math.random() * 1.2,
+        a: 0.5 + Math.random() * 0.5,
         p: Math.random() * 6
       }));
       let best = Number(localStorage.getItem("car34-best") || 0);
