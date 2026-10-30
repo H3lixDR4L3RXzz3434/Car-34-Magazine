@@ -1546,6 +1546,40 @@
         return hornBufferPromise;
       }
 
+      // Rayitas al tocar el pito (estilo Goose Simulator)
+      const honkMarks = [];
+      let lastHonkSpawn = 0;
+      function spawnHonk() {
+        lastHonkSpawn = performance.now();
+        for (const angle of [-0.45, 0, 0.45]) {
+          honkMarks.push({ angle: angle + (Math.random() - 0.5) * 0.12, life: 1 });
+        }
+      }
+      function drawHonkMarks() {
+        if (hornSource && performance.now() - lastHonkSpawn > 180) spawnHonk();
+        if (!honkMarks.length || mp.spectating) return;
+        const dark = document.body.classList.contains("dark");
+        const ox = car.x - camera + car.width + 8;
+        const oy = car.y + car.height * 0.35;
+        context.save();
+        context.lineCap = "round";
+        context.lineWidth = 2.5;
+        context.strokeStyle = dark ? "#eef0fa" : "#242621";
+        for (let i = honkMarks.length - 1; i >= 0; i--) {
+          const m = honkMarks[i];
+          const r0 = 8 + (1 - m.life) * 18;
+          const r1 = r0 + 9;
+          context.globalAlpha = Math.max(0, m.life);
+          context.beginPath();
+          context.moveTo(ox + Math.cos(m.angle) * r0, oy + Math.sin(m.angle) * r0);
+          context.lineTo(ox + Math.cos(m.angle) * r1, oy + Math.sin(m.angle) * r1);
+          context.stroke();
+          m.life -= 0.045;
+          if (m.life <= 0) honkMarks.splice(i, 1);
+        }
+        context.restore();
+      }
+
       async function startHorn() {
         if (!running || hornHeld) return;
         hornHeld = true;
@@ -1567,6 +1601,7 @@
           source.connect(hornAudioContext.destination);
           source.start();
           hornSource = source;
+          spawnHonk();
         } catch (error) {
           if (pressId === hornPressId) hornHeld = false;
           console.error("No se pudo reproducir el pito de Car 34.", error);
@@ -2275,6 +2310,7 @@
           context.shadowBlur = 0;
           context.shadowOffsetY = 0;
         }
+        drawHonkMarks();
         for (const d of dust) {
           context.globalAlpha = d.color ? d.life : d.life * 0.35;
           context.fillStyle = d.color || "#242621";
