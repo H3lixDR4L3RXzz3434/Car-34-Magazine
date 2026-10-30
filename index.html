@@ -801,7 +801,14 @@
     .coin-total { margin: 10px 0 0; font-size: 13px; font-weight: 700; letter-spacing: .06em; color: #f47745; }
     .key-levels { max-width: 420px; }
     .shop-section[hidden] { display: none; }
-  </style>
+      .ach-list { display: grid; gap: 8px; width: 100%; max-height: 260px; overflow-y: auto; text-align: left; }
+    .ach-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 217, 61, .14); border: 1px solid rgba(255, 217, 61, .45); }
+    .ach-item.locked { background: rgba(127, 127, 127, .12); border-color: rgba(127, 127, 127, .3); opacity: .75; }
+    .ach-item strong { font-size: 15px; }
+    .ach-item span { font-size: 13px; opacity: .85; }
+    .ach-toast { position: fixed; top: 14px; left: 50%; transform: translate(-50%, -160%); transition: transform .35s ease; z-index: 50; background: #ffd93d; color: #1d1d1d; font-weight: 700; padding: 10px 18px; border-radius: 12px; box-shadow: 0 8px 22px rgba(0, 0, 0, .35); pointer-events: none; max-width: 90vw; text-align: center; }
+    .ach-toast.show { transform: translate(-50%, 0); }
+    </style>
 </head>
 <body>
   <main class="game-shell">
@@ -917,6 +924,7 @@
             <button id="tabInventory" class="tab" type="button" aria-pressed="false">Inventario</button>
             <button id="tabCustom" class="tab" type="button" aria-pressed="false">Personalizar</button>
             <button id="tabLevels" class="tab" type="button" aria-pressed="false">Niveles</button>
+            <button id="tabAchievements" class="tab" type="button" aria-pressed="false">Logros</button>
           </div>
           <section id="sectionModels" class="shop-section models-section">
             <div class="model-list" id="models"></div>
@@ -955,6 +963,10 @@
               <button id="buyKey" type="button"></button>
               <button id="useKey" class="secondary" type="button">Usar llave</button>
             </div>
+          </section>
+          <section id="sectionAchievements" class="shop-section" hidden>
+            <p class="shop-label" id="achCount"></p>
+            <div class="ach-list" id="achList"></div>
           </section>
           <div class="actions shop">
             <button id="shopClose" class="secondary" type="button">Cerrar</button>
@@ -1163,6 +1175,55 @@
         coins = 0;
         doneLevels = [];
       }
+      // ----- Logros -----
+      const ACHIEVEMENTS = [
+        { id: "primer_paso", name: "Primer paso", desc: "Completa el nivel 1." },
+        { id: "medio_camino", name: "Medio camino", desc: "Completa el nivel 25." },
+        { id: "campeon", name: "Campeón", desc: "Completa el nivel 50." },
+        { id: "ahorrador", name: "Ahorrador", desc: "Ten 500 monedas a la vez." },
+        { id: "kilometro", name: "Kilómetro", desc: "Llega a 1000 m en modo infinito." },
+        { id: "llave_maestra", name: "Llave maestra", desc: "Entra a un nivel con una llave de práctica." },
+        { id: "cristofer", name: "Cristofer 😂", desc: "Muere 7 veces seguidas." }
+      ];
+      let achieved = [];
+      try {
+        achieved = JSON.parse(localStorage.getItem("car34-achievements") || "[]").filter((id) => ACHIEVEMENTS.some((a) => a.id === id));
+      } catch (error) { achieved = []; }
+      let deathStreak = 0;
+      const achToast = document.createElement("div");
+      achToast.className = "ach-toast";
+      achToast.setAttribute("role", "status");
+      document.body.appendChild(achToast);
+      let achToastTimer = 0;
+      function renderAchievements() {
+        const list = document.querySelector("#achList");
+        list.textContent = "";
+        for (const a of ACHIEVEMENTS) {
+          const done = achieved.includes(a.id);
+          const item = document.createElement("div");
+          item.className = done ? "ach-item" : "ach-item locked";
+          const title = document.createElement("strong");
+          title.textContent = `${done ? "🏆" : "🔒"} ${a.name}`;
+          const desc = document.createElement("span");
+          desc.textContent = a.desc;
+          item.append(title, desc);
+          list.appendChild(item);
+        }
+        document.querySelector("#achCount").textContent = `${achieved.length} de ${ACHIEVEMENTS.length} logros`;
+      }
+      function unlockAchievement(id) {
+        if (achieved.includes(id)) return;
+        const a = ACHIEVEMENTS.find((item) => item.id === id);
+        if (!a) return;
+        achieved.push(id);
+        try { localStorage.setItem("car34-achievements", JSON.stringify(achieved)); } catch (error) { /* sin almacenamiento */ }
+        achToast.textContent = `🏆 Logro desbloqueado: ${a.name}`;
+        achToast.classList.add("show");
+        clearTimeout(achToastTimer);
+        achToastTimer = setTimeout(() => achToast.classList.remove("show"), 3200);
+        renderAchievements();
+      }
+      document.querySelector("#tabAchievements").addEventListener("click", renderAchievements);
       function saveCoins() {
         try {
           localStorage.setItem("car34-coins", String(coins));
@@ -1170,7 +1231,7 @@
         } catch (error) { /* sin almacenamiento */ }
       }
       function levelReward(n) { return 5 + n * 2; }
-      function updateCoinLabel() { document.querySelector("#coinTotal").textContent = `● ${coins} monedas`; }
+      function updateCoinLabel() { document.querySelector("#coinTotal").textContent = `● ${coins} monedas`; if (coins >= 500) unlockAchievement("ahorrador"); }
       updateCoinLabel();
       let unlocked = 1;
       try { unlocked = Math.min(50, Math.max(1, Number(localStorage.getItem("car34-unlocked") || 1))); } catch (error) { unlocked = 1; }
@@ -1487,7 +1548,7 @@
         cancelAnimationFrame(animationFrame);
         demo = false;
         resetGame();
-        if (practiceLevel) applyLoadout();
+        if (practiceLevel) { applyLoadout(); unlockAchievement("llave_maestra"); }
         overlay.hidden = true;
         deathOverlay.hidden = true;
         pauseOverlay.hidden = true;
@@ -1512,6 +1573,11 @@
         stopHorn();
         document.querySelector("#hornButton").disabled = true;
         best = Math.max(best, Math.floor(distance));
+        if (!demo) {
+          deathStreak++;
+          if (deathStreak >= 7) unlockAchievement("cristofer");
+          if (selectedLevel === 0 && Math.floor(distance) >= 1000) unlockAchievement("kilometro");
+        }
         localStorage.setItem("car34-best", String(best));
         const finalDistance = Math.floor(distance);
         const coinReward = !demo && selectedLevel === 0 ? Math.floor(distance / 10) : 0;
@@ -2451,6 +2517,12 @@
         gearButton.hidden = true;
         const n = selectedLevel;
         const practice = practiceLevel > 0;
+        deathStreak = 0;
+        if (!practice) {
+          if (n === 1) unlockAchievement("primer_paso");
+          if (n >= 25) unlockAchievement("medio_camino");
+          if (n >= 50) unlockAchievement("campeon");
+        }
         if (!practice) unlocked = Math.max(unlocked, Math.min(50, n + 1));
         try { localStorage.setItem("car34-unlocked", String(unlocked)); } catch (error) { /* sin almacenamiento */ }
         buildLevelList();
@@ -3042,8 +3114,8 @@
         updateCoinLabel();
       }
 
-      const tabIds = { models: "#tabModels", colors: "#tabColors", inventory: "#tabInventory", custom: "#tabCustom", levels: "#tabLevels" };
-      const sectionIds = { models: "#sectionModels", colors: "#sectionColors", inventory: "#sectionInventory", custom: "#sectionCustom", levels: "#sectionLevels" };
+      const tabIds = { models: "#tabModels", colors: "#tabColors", inventory: "#tabInventory", custom: "#tabCustom", levels: "#tabLevels", achievements: "#tabAchievements" };
+      const sectionIds = { models: "#sectionModels", colors: "#sectionColors", inventory: "#sectionInventory", custom: "#sectionCustom", levels: "#sectionLevels", achievements: "#sectionAchievements" };
       function showShopTab(which) {
         for (const key of Object.keys(sectionIds)) {
           document.querySelector(sectionIds[key]).hidden = key !== which;
