@@ -887,7 +887,7 @@
           <div class="mode-cards">
             <button id="modeNormal" class="mode-card" type="button">
               <span class="mode-title">Normal</span>
-              <span class="mode-desc">10 niveles con meta en el taller</span>
+              <span class="mode-desc">50 niveles con meta en el taller</span>
             </button>
             <button id="modeInfinite" class="mode-card" type="button">
               <span class="mode-title">Infinito</span>
@@ -1105,7 +1105,7 @@
       // Niveles: 0 = libre; 1..10 = niveles con meta en un taller
       let selectedLevel = 0;
       let unlocked = 1;
-      try { unlocked = Math.min(10, Math.max(1, Number(localStorage.getItem("car34-unlocked") || 1))); } catch (error) { unlocked = 1; }
+      try { unlocked = Math.min(50, Math.max(1, Number(localStorage.getItem("car34-unlocked") || 1))); } catch (error) { unlocked = 1; }
       let goalPlatform = null;
       let goalX = null;
       let levelDone = false;
@@ -1358,22 +1358,22 @@
       }
 
       function levelGoalMeters(n) {
-        return 60 + 35 * n;
+        return 60 + 30 * n + 2 * n * n;
       }
 
       function levelParams() {
         const n = demo ? 0 : selectedLevel;
         if (!n) return { n: 0, gapMin: 48, gapRange: 62, wMin: 95, wRange: 75, yJit: 55, crateChance: 0, enemyChance: 0, spikeChance: 0, highChance: 0 };
         return {
-          gapMin: 44 + n * 3,
-          gapRange: 18 + n * 6,
+          gapMin: Math.min(44 + n * 3, 80),
+          gapRange: Math.min(18 + n * 6, 60),
           wMin: Math.max(80, 190 - n * 11),
           wRange: Math.max(30, 70 - n * 4),
-          yJit: 50 + n * 5,
-          crateChance: 0.35,
-          enemyChance: n >= 2 ? 0.1 + n * 0.03 : 0,
-          spikeChance: n >= 2 ? 0.08 + n * 0.02 : 0,
-          highChance: n >= 2 ? 0.04 + n * 0.02 : 0
+          yJit: Math.min(50 + n * 5, 100),
+          crateChance: 0.45,
+          enemyChance: n >= 2 ? Math.min(0.4, 0.1 + n * 0.03) : 0,
+          spikeChance: n >= 2 ? Math.min(0.3, 0.08 + n * 0.02) : 0,
+          highChance: n >= 2 ? Math.min(0.25, 0.04 + n * 0.02) : 0
         };
       }
 
@@ -1694,11 +1694,91 @@
         }
       }
 
+      // Lluvia y tormentas (desde el nivel 25). El sonido de truenos se conectará después.
+      const RAIN_FROM_LEVEL = 25;
+      const rainDrops = [];
+      const rainSplashes = [];
+      let lightningFlash = 0;
+      let nextLightning = 0;
+      function rainActive() { return !demo && selectedLevel >= RAIN_FROM_LEVEL; }
+      function playThunderSound() { /* aquí se conectará el sonido de truenos */ }
+      function newDrop(far) {
+        return {
+          x: Math.random() * width,
+          y: -Math.random() * height,
+          far,
+          v: far ? 9 + Math.random() * 4 : 15 + Math.random() * 6,
+          len: far ? 7 + Math.random() * 5 : 14 + Math.random() * 10
+        };
+      }
+      function drawRain() {
+        if (!rainActive()) return;
+        const dark = theme === themes.dark;
+        if (rainDrops.length === 0) {
+          for (let i = 0; i < 90; i++) rainDrops.push(newDrop(true));
+          for (let i = 0; i < 70; i++) rainDrops.push(newDrop(false));
+        }
+        const now = performance.now();
+        if (now > nextLightning) {
+          lightningFlash = 1;
+          nextLightning = now + 4000 + Math.random() * 7000;
+          playThunderSound();
+        }
+        context.save();
+        context.fillStyle = dark ? "rgba(4, 8, 24, .22)" : "rgba(60, 70, 88, .10)";
+        context.fillRect(0, 0, width, height);
+        if (lightningFlash > 0) {
+          context.fillStyle = dark ? `rgba(190, 205, 255, ${lightningFlash * 0.35})` : `rgba(255, 255, 255, ${lightningFlash * 0.55})`;
+          context.fillRect(0, 0, width, height);
+          lightningFlash = Math.max(0, lightningFlash - 0.05);
+        }
+        const streak = dark ? "190, 205, 235" : "70, 80, 96";
+        context.lineCap = "round";
+        for (const d of rainDrops) {
+          const prevY = d.y;
+          d.y += d.v;
+          d.x -= d.v * 0.18;
+          let hit = null;
+          if (d.y >= height - 34 && prevY < height - 34) hit = { x: d.x, y: height - 34 };
+          for (const p of platforms) {
+            const px = p.x - camera;
+            if (!hit && d.x >= px && d.x <= px + p.width && prevY <= p.y && d.y >= p.y) hit = { x: d.x, y: p.y };
+          }
+          if (hit) {
+            if (rainSplashes.length < 80) rainSplashes.push({ x: hit.x, y: hit.y, r: 1, life: 1 });
+            Object.assign(d, newDrop(d.far));
+            d.y = -d.len;
+            continue;
+          }
+          if (d.x < -20) d.x = width + 20;
+          if (d.y > height) Object.assign(d, newDrop(d.far), { y: -d.len });
+          context.strokeStyle = `rgba(${streak}, ${d.far ? 0.22 : 0.42})`;
+          context.lineWidth = d.far ? 1 : 1.5;
+          context.beginPath();
+          context.moveTo(d.x, d.y);
+          context.lineTo(d.x + d.len * 0.18, d.y - d.len);
+          context.stroke();
+        }
+        for (let i = rainSplashes.length - 1; i >= 0; i--) {
+          const s = rainSplashes[i];
+          s.r += 0.9;
+          s.life -= 0.06;
+          context.strokeStyle = `rgba(${streak}, ${Math.max(0, s.life) * 0.5})`;
+          context.lineWidth = 1;
+          context.beginPath();
+          context.ellipse(s.x, s.y, s.r * 1.8, s.r * 0.5, 0, 0, Math.PI * 2);
+          context.stroke();
+          if (s.life <= 0) rainSplashes.splice(i, 1);
+        }
+        context.restore();
+      }
+
       function drawBackground() {
         context.clearRect(0, 0, width, height);
         const sky = context.createLinearGradient(0, 0, 0, height);
-        sky.addColorStop(0, theme.sky0);
-        sky.addColorStop(1, theme.sky1);
+        const night = theme === themes.dark && rainActive();
+        sky.addColorStop(0, night ? "#020410" : theme.sky0);
+        sky.addColorStop(1, night ? "#0a1230" : theme.sky1);
         context.fillStyle = sky;
         context.fillRect(0, 0, width, height);
         if (theme === themes.dark) drawNight();
@@ -2251,16 +2331,16 @@
         hud.hidden = true;
         gearButton.hidden = true;
         const n = selectedLevel;
-        unlocked = Math.max(unlocked, Math.min(10, n + 1));
+        unlocked = Math.max(unlocked, Math.min(50, n + 1));
         try { localStorage.setItem("car34-unlocked", String(unlocked)); } catch (error) { /* sin almacenamiento */ }
         buildLevelList();
         document.querySelector("#levelText").textContent = `Nivel ${n} completado en ${Math.floor(distance)} m.`;
-        document.querySelector("#nextLevelButton").hidden = n >= 10;
+        document.querySelector("#nextLevelButton").hidden = n >= 50;
         levelOverlay.hidden = false;
       }
 
       function nextLevel() {
-        selectLevel(Math.min(10, selectedLevel + 1));
+        selectLevel(Math.min(50, selectedLevel + 1));
         startGame();
       }
 
@@ -2310,6 +2390,7 @@
           context.shadowBlur = 0;
           context.shadowOffsetY = 0;
         }
+        drawRain();
         drawHonkMarks();
         for (const d of dust) {
           context.globalAlpha = d.color ? d.life : d.life * 0.35;
@@ -2381,6 +2462,14 @@
             }
             car.vy = 0;
             car.grounded = true;
+            if (platform.high) {
+              // Trampolín: rebota hacia arriba
+              car.vy = -15;
+              car.grounded = false;
+              car.squash = 0.6;
+              if (!demo) playTone(520, 0.14, "sine", 0.12, 780);
+              spawnDust(car.x + car.width / 2, platform.y, 8);
+            }
           }
         }
 
@@ -2678,7 +2767,7 @@
 
       function buildLevelList() {
         levelList.innerHTML = "";
-        for (let n = 1; n <= 10; n++) {
+        for (let n = 1; n <= 50; n++) {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "model-chip";
