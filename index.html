@@ -1428,6 +1428,18 @@
             context.arc(x + o.w * 0.38 + o.dir * 0.8, o.y + o.h - 6, 1.2, 0, Math.PI * 2);
             context.arc(x + o.w * 0.62 + o.dir * 0.8, o.y + o.h - 6, 1.2, 0, Math.PI * 2);
             context.fill();
+          } else if (o.type === "wall") {
+            context.fillStyle = "#6b4f3a";
+            context.fillRect(x, o.y, o.w, o.h);
+            context.strokeStyle = "#3e2c20";
+            context.lineWidth = 2;
+            context.strokeRect(x + 1, o.y + 1, o.w - 2, o.h - 2);
+            context.beginPath();
+            for (let ly = o.y + 14; ly < o.y + o.h; ly += 14) {
+              context.moveTo(x, ly);
+              context.lineTo(x + o.w, ly);
+            }
+            context.stroke();
           } else if (o.type === "spikes") {
             context.fillStyle = "#7b8290";
             context.beginPath();
@@ -1495,6 +1507,10 @@
       }
 
       function extendPlatforms(untilX) {
+        if (bossMode && !demo) {
+          extendBossRoad(untilX);
+          return;
+        }
         while (!levelDone && platforms[platforms.length - 1].x < untilX) {
           const last = platforms[platforms.length - 1];
           const lp = levelParams();
@@ -1528,16 +1544,18 @@
       let bossBest = 0;
       try { bossBest = Number(localStorage.getItem("car34-boss-best") || 0) || 0; } catch (error) { bossBest = 0; }
       let bossTime = 0;
+      let bossNextX = 0;
       const boss = { x: 0, groundY: 0, speed: 3.2 };
       function resetBoss() {
         bossTime = 0;
         boss.speed = 3.2;
         boss.groundY = car.y + car.height;
         boss.x = car.x - 900;
+        bossNextX = car.x + 520;
       }
       function stepBoss() {
         bossTime++;
-        boss.speed = Math.min(6.2, 3.2 + bossTime * 0.0006);
+        boss.speed = Math.min(4.3, 2.8 + bossTime * 0.0003);
         boss.x += boss.speed;
         const center = car.x + car.width / 2;
         const under = platforms.find((p) => center >= p.x && center <= p.x + p.width);
@@ -1631,6 +1649,18 @@
         irisTransition(startBoss);
       });
 
+      // Autopista de Bosspalooza: una sola pista continua con paredes y pinchos
+      function extendBossRoad(untilX) {
+        const road = platforms[platforms.length - 1];
+        road.width = Math.max(road.width, untilX + 400 - road.x);
+        while (bossNextX < untilX) {
+          if (Math.random() < 0.55) objects.push({ type: "wall", x: bossNextX, y: road.y - 58, w: 26, h: 58, dead: false, taken: false });
+          else objects.push({ type: "spikes", x: bossNextX, y: road.y - 9, w: 36, h: 9, dead: false, taken: false });
+          const difficulty = Math.min(90, distance * 0.6);
+          bossNextX += Math.max(230, 300 + Math.random() * 160 - difficulty);
+        }
+      }
+
       function resetGame() {
         levelRand = mp.inRound && mp.seed !== null ? mulberry32(mp.seed) : Math.random;
         camera = 0;
@@ -1647,12 +1677,12 @@
         levelDone = false;
         objects = [];
         resetPowers();
-        hearts = 5;
+        hearts = bossMode && !demo ? 1 : 5;
         hurtTimer = 0;
         introTimer = demo ? 0 : 40;
         goalX = !demo && selectedLevel ? 90 + levelGoalMeters(selectedLevel) * 10 : null;
-        extendPlatforms(width + 300);
         if (bossMode && !demo) resetBoss();
+        extendPlatforms(width + 300);
       }
 
       function startDemo() {
