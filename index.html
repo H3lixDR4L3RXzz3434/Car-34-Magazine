@@ -808,6 +808,8 @@
     .ach-item span { font-size: 13px; opacity: .85; }
     .ach-toast { position: fixed; top: 14px; left: 50%; transform: translate(-50%, -160%); transition: transform .35s ease; z-index: 50; background: #ffd93d; color: #1d1d1d; font-weight: 700; padding: 10px 18px; border-radius: 12px; box-shadow: 0 8px 22px rgba(0, 0, 0, .35); pointer-events: none; max-width: 90vw; text-align: center; }
     .ach-toast.show { transform: translate(-50%, 0); }
+        .mg-card { display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 14px; border-radius: 14px; background: rgba(214, 38, 30, .12); border: 1px solid rgba(214, 38, 30, .45); text-align: left; }
+    .mg-card h2 { margin: 0; font-size: 22px; }
     </style>
 </head>
 <body>
@@ -845,6 +847,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6v12l8.5-6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
           </button>
           <button id="shopButton" class="secondary levels-btn" type="button">Variedades</button>
+          <button id="minigamesButton" class="secondary levels-btn" type="button">Minijuegos</button>
           <p class="coin-total" id="coinTotal"></p>
         </div>
       </div>
@@ -971,6 +974,19 @@
           <div class="actions shop">
             <button id="shopClose" class="secondary" type="button">Cerrar</button>
           </div>
+        </div>
+      </div>
+      <div class="overlay" id="minigamesPanel" hidden>
+        <div class="intro">
+          <p class="eyebrow">Minijuegos</p>
+          <h1>MINIJUEGOS<span>.</span></h1>
+          <div class="mg-card">
+            <h2>Bosspalooza</h2>
+            <p class="description">Un cosechador gigante se come la pista detrás de ti. Sigue avanzando, salta por encima de él cuando te alcance y no te quedes atrás.</p>
+            <p class="shop-label" id="bossBest"></p>
+            <div class="actions"><button id="bossPlay" type="button">Jugar</button></div>
+          </div>
+          <div class="actions shop"><button id="minigamesClose" class="secondary" type="button">Cerrar</button></div>
         </div>
       </div>
       <div class="overlay" id="keyPanel" hidden>
@@ -1505,6 +1521,116 @@
         while (platforms.length > 1 && platforms[0].x + platforms[0].width < camera - 100) platforms.shift();
       }
 
+      // ===== Bosspalooza: cosechador gigante que persigue al carrito =====
+      const BOSS_W = 210;
+      const BOSS_H = 150;
+      let bossMode = false;
+      let bossBest = 0;
+      try { bossBest = Number(localStorage.getItem("car34-boss-best") || 0) || 0; } catch (error) { bossBest = 0; }
+      let bossTime = 0;
+      const boss = { x: 0, groundY: 0, speed: 3.2 };
+      function resetBoss() {
+        bossTime = 0;
+        boss.speed = 3.2;
+        boss.groundY = car.y + car.height;
+        boss.x = car.x - 900;
+      }
+      function stepBoss() {
+        bossTime++;
+        boss.speed = Math.min(6.2, 3.2 + bossTime * 0.0006);
+        boss.x += boss.speed;
+        const center = car.x + car.width / 2;
+        const under = platforms.find((p) => center >= p.x && center <= p.x + p.width);
+        if (under) boss.groundY = under.y;
+        if (bossTime % 5 === 0) spawnDust(boss.x + BOSS_W, boss.groundY, 3);
+        const front = boss.x + BOSS_W;
+        const bossTop = boss.groundY - BOSS_H;
+        return front > car.x + 8 && car.y + car.height > bossTop + 12;
+      }
+      function drawBoss() {
+        const x = boss.x - camera;
+        const g = boss.groundY;
+        const top = g - BOSS_H;
+        groundShadow(x + BOSS_W / 2, g + 4, 110);
+        for (const wx of [x + 46, x + BOSS_W - 52]) {
+          context.fillStyle = "#1f2328";
+          context.beginPath();
+          context.arc(wx, g - 30, 30, 0, Math.PI * 2);
+          context.fill();
+          context.strokeStyle = "#7a818a";
+          context.lineWidth = 4;
+          for (let i = 0; i < 4; i++) {
+            const a = wheelAngle * 1.2 + (i * Math.PI) / 2;
+            context.beginPath();
+            context.moveTo(wx, g - 30);
+            context.lineTo(wx + Math.cos(a) * 24, g - 30 + Math.sin(a) * 24);
+            context.stroke();
+          }
+          context.fillStyle = "#c9ced6";
+          context.beginPath();
+          context.arc(wx, g - 30, 7, 0, Math.PI * 2);
+          context.fill();
+        }
+        context.lineWidth = 1;
+        context.fillStyle = "#d7261e";
+        context.beginPath();
+        context.roundRect(x + 6, top + 62, BOSS_W - 30, g - top - 102, 10);
+        context.fill();
+        context.fillStyle = "#b51b15";
+        context.beginPath();
+        context.roundRect(x + 14, top + 6, 86, 64, 12);
+        context.fill();
+        context.fillStyle = "#a8e2ff";
+        context.beginPath();
+        context.roundRect(x + 24, top + 16, 56, 30, 6);
+        context.fill();
+        const mouthX = x + BOSS_W - 56;
+        const mouthH = g - top - 52;
+        context.fillStyle = "#ffd23f";
+        context.beginPath();
+        context.roundRect(mouthX, top + 30, 62, mouthH, 10);
+        context.fill();
+        const cx = mouthX + 31;
+        const cy = top + 30 + mouthH / 2;
+        context.strokeStyle = "#8a5a00";
+        context.lineWidth = 5;
+        for (let i = 0; i < 4; i++) {
+          const a = bossTime * 0.35 + (i * Math.PI) / 2;
+          context.beginPath();
+          context.moveTo(cx, cy);
+          context.lineTo(cx + Math.cos(a) * 24, cy + Math.sin(a) * 24);
+          context.stroke();
+        }
+        context.lineWidth = 1;
+        context.fillStyle = "#fff";
+        for (let i = 0; i < 4; i++) {
+          const tx = mouthX + 6 + i * 14;
+          context.beginPath();
+          context.moveTo(tx, g - 40);
+          context.lineTo(tx + 7, g - 26);
+          context.lineTo(tx + 14, g - 40);
+          context.fill();
+        }
+      }
+      function startBoss() {
+        selectLevel(0);
+        bossMode = true;
+        practiceLevel = 0;
+        startGame();
+        levelLabel.textContent = "BOSSPALOOZA";
+        bestLabel.textContent = bossBest;
+      }
+      const minigamesPanel = document.querySelector("#minigamesPanel");
+      document.querySelector("#minigamesButton").addEventListener("click", () => {
+        document.querySelector("#bossBest").textContent = `Récord: ${bossBest} m`;
+        minigamesPanel.hidden = false;
+      });
+      document.querySelector("#minigamesClose").addEventListener("click", () => { minigamesPanel.hidden = true; });
+      document.querySelector("#bossPlay").addEventListener("click", () => {
+        minigamesPanel.hidden = true;
+        irisTransition(startBoss);
+      });
+
       function resetGame() {
         levelRand = mp.inRound && mp.seed !== null ? mulberry32(mp.seed) : Math.random;
         camera = 0;
@@ -1526,6 +1652,7 @@
         introTimer = demo ? 0 : 40;
         goalX = !demo && selectedLevel ? 90 + levelGoalMeters(selectedLevel) * 10 : null;
         extendPlatforms(width + 300);
+        if (bossMode && !demo) resetBoss();
       }
 
       function startDemo() {
@@ -1572,7 +1699,13 @@
         pauseOverlay.hidden = true;
         stopHorn();
         document.querySelector("#hornButton").disabled = true;
-        best = Math.max(best, Math.floor(distance));
+        if (bossMode && !demo) {
+          bossBest = Math.max(bossBest, Math.floor(distance));
+          try { localStorage.setItem("car34-boss-best", String(bossBest)); } catch (error) { /* sin almacenamiento */ }
+          bestLabel.textContent = bossBest;
+        } else {
+          best = Math.max(best, Math.floor(distance));
+        }
         if (!demo) {
           if (byVoid && selectedLevel === 1 && Math.floor(distance) < 50) {
             voidStreak++;
@@ -1582,7 +1715,7 @@
           }
           if (selectedLevel === 0 && Math.floor(distance) >= 1000) unlockAchievement("kilometro");
         }
-        localStorage.setItem("car34-best", String(best));
+        if (!(bossMode && !demo)) localStorage.setItem("car34-best", String(best));
         const finalDistance = Math.floor(distance);
         const coinReward = !demo && selectedLevel === 0 ? Math.floor(distance / 10) : 0;
         if (coinReward > 0) {
@@ -1590,7 +1723,7 @@
           saveCoins();
         }
         updateCoinLabel();
-        deathEyebrow.textContent = finalDistance > 0 && finalDistance === best
+        deathEyebrow.textContent = finalDistance > 0 && finalDistance === (bossMode && !demo ? bossBest : best)
           ? `¡Récord nuevo: ${best} m!`
           : `Recorriste ${finalDistance} m`;
         if (coinReward > 0) deathEyebrow.textContent += ` · +${coinReward} monedas`;
@@ -1625,6 +1758,7 @@
       function showMenu() {
         stopRainSound();
         practiceLevel = 0;
+        bossMode = false;
         updateCoinLabel();
         if (mp.channel) mpLeave();
         cancelAnimationFrame(animationFrame);
@@ -2610,6 +2744,7 @@
         drawSigns();
         drawRacers();
         drawRemoteCars();
+        if (bossMode && !demo) drawBoss();
         context.save();
         context.translate(0, introOffset());
         if (mp.spectating) {
@@ -2681,6 +2816,12 @@
             mpKeepGoing();
             return;
           }
+          redFilter.classList.add("on");
+          endGame();
+          return;
+        }
+
+        if (!demo && bossMode && introTimer <= 0 && stepBoss()) {
           redFilter.classList.add("on");
           endGame();
           return;
@@ -2977,6 +3118,7 @@
       const levelLabel = document.querySelector("#levelLabel");
 
       function selectLevel(n) {
+        bossMode = false;
         selectedLevel = n;
         eyebrow.textContent = n ? `Nivel ${n}` : "Pequeño viaje, gran aventura";
         for (const button of levelList.children) {
