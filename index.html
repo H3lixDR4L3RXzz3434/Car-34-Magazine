@@ -798,6 +798,7 @@
     body.dark .mp-countdown { background: rgba(8, 12, 31, .45); }
     .mp-countdown[hidden] { display: none; }
 
+    .coin-total { margin: 10px 0 0; font-size: 13px; font-weight: 700; letter-spacing: .06em; color: #f47745; }
   </style>
 </head>
 <body>
@@ -835,6 +836,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6v12l8.5-6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
           </button>
           <button id="shopButton" class="secondary levels-btn" type="button">Tienda</button>
+          <p class="coin-total" id="coinTotal"></p>
         </div>
       </div>
       <div class="overlay" id="deathOverlay" hidden>
@@ -1102,6 +1104,26 @@
       let trail = [];
       // Niveles: 0 = libre; 1..10 = niveles con meta en un taller
       let selectedLevel = 0;
+
+      // Monedas: 5 + 2×nivel la primera vez que completas cada nivel, y 1 por cada 10 m en modo infinito
+      let coins = 0;
+      let doneLevels = [];
+      try {
+        coins = Number(localStorage.getItem("car34-coins") || 0) || 0;
+        doneLevels = JSON.parse(localStorage.getItem("car34-done") || "[]") || [];
+      } catch (error) {
+        coins = 0;
+        doneLevels = [];
+      }
+      function saveCoins() {
+        try {
+          localStorage.setItem("car34-coins", String(coins));
+          localStorage.setItem("car34-done", JSON.stringify(doneLevels));
+        } catch (error) { /* sin almacenamiento */ }
+      }
+      function levelReward(n) { return 5 + n * 2; }
+      function updateCoinLabel() { document.querySelector("#coinTotal").textContent = `● ${coins} monedas`; }
+      updateCoinLabel();
       let unlocked = 1;
       try { unlocked = Math.min(50, Math.max(1, Number(localStorage.getItem("car34-unlocked") || 1))); } catch (error) { unlocked = 1; }
       let goalPlatform = null;
@@ -1443,9 +1465,16 @@
         best = Math.max(best, Math.floor(distance));
         localStorage.setItem("car34-best", String(best));
         const finalDistance = Math.floor(distance);
+        const coinReward = !demo && selectedLevel === 0 ? Math.floor(distance / 10) : 0;
+        if (coinReward > 0) {
+          coins += coinReward;
+          saveCoins();
+        }
+        updateCoinLabel();
         deathEyebrow.textContent = finalDistance > 0 && finalDistance === best
           ? `¡Récord nuevo: ${best} m!`
           : `Recorriste ${finalDistance} m`;
+        if (coinReward > 0) deathEyebrow.textContent += ` · +${coinReward} monedas`;
         typeText(deathText, funnyDeaths[Math.floor(Math.random() * funnyDeaths.length)]);
         redFilter.classList.add("on");
         deathOverlay.hidden = false;
@@ -1476,6 +1505,7 @@
 
       function showMenu() {
         stopRainSound();
+        updateCoinLabel();
         if (mp.channel) mpLeave();
         cancelAnimationFrame(animationFrame);
         running = false;
@@ -2373,7 +2403,16 @@
         unlocked = Math.max(unlocked, Math.min(50, n + 1));
         try { localStorage.setItem("car34-unlocked", String(unlocked)); } catch (error) { /* sin almacenamiento */ }
         buildLevelList();
-        document.querySelector("#levelText").textContent = `Nivel ${n} completado en ${Math.floor(distance)} m.`;
+        let rewardText = "";
+        if (!doneLevels.includes(n)) {
+          const reward = levelReward(n);
+          coins += reward;
+          doneLevels.push(n);
+          saveCoins();
+          rewardText = ` +${reward} monedas.`;
+        }
+        updateCoinLabel();
+        document.querySelector("#levelText").textContent = `Nivel ${n} completado en ${Math.floor(distance)} m.${rewardText}`;
         document.querySelector("#nextLevelButton").hidden = n >= 50;
         levelOverlay.hidden = false;
       }
