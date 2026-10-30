@@ -799,6 +799,8 @@
     .mp-countdown[hidden] { display: none; }
 
     .coin-total { margin: 10px 0 0; font-size: 13px; font-weight: 700; letter-spacing: .06em; color: #f47745; }
+    .key-levels { max-width: 420px; }
+    .shop-section[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -908,24 +910,70 @@
         <div class="intro shop-intro">
           <p class="eyebrow">Tienda</p>
           <h1>TIENDA<span>.</span></h1>
+          <p class="coin-total" id="shopCoins"></p>
           <div class="tabs">
             <button id="tabModels" class="tab" type="button" aria-pressed="true">Modelos</button>
             <button id="tabColors" class="tab" type="button" aria-pressed="false">Colores</button>
+            <button id="tabInventory" class="tab" type="button" aria-pressed="false">Inventario</button>
+            <button id="tabCustom" class="tab" type="button" aria-pressed="false">Personalizar</button>
+            <button id="tabLevels" class="tab" type="button" aria-pressed="false">Niveles</button>
           </div>
           <section id="sectionModels" class="shop-section models-section">
             <div class="model-list" id="models"></div>
             <div class="big-preview">
               <canvas id="modelPreview" width="420" height="260" aria-label="Vista previa del modelo"></canvas>
             </div>
+            <div class="actions shop"><button id="buyModel" type="button"></button></div>
           </section>
           <section id="sectionColors" class="shop-section colors-section" hidden>
             <div class="color-stage">
               <canvas id="colorPreview" width="420" height="260" aria-label="Vista previa del color"></canvas>
             </div>
             <div class="swatches" id="swatches"></div>
+            <div class="actions shop"><button id="buyColor" type="button"></button></div>
+          </section>
+          <section id="sectionInventory" class="shop-section" hidden>
+            <p class="shop-label">Modelos</p>
+            <div class="mp-row" id="invModels"></div>
+            <p class="shop-label">Colores</p>
+            <div class="swatches" id="invColors"></div>
+            <p class="shop-label" id="invKeys"></p>
+          </section>
+          <section id="sectionCustom" class="shop-section" hidden>
+            <div class="big-preview">
+              <canvas id="custPreview" width="420" height="260" aria-label="Tu carrito"></canvas>
+            </div>
+            <p class="shop-label">Modelo</p>
+            <div class="mp-row" id="custModels"></div>
+            <p class="shop-label">Color</p>
+            <div class="swatches" id="custColors"></div>
+          </section>
+          <section id="sectionLevels" class="shop-section" hidden>
+            <p class="description">Llave de práctica: entra a cualquier nivel con el power-up y las vidas que elijas. Cada llave se usa una vez, y el nivel desaparece al salir.</p>
+            <p class="shop-label" id="keyCount"></p>
+            <div class="actions shop">
+              <button id="buyKey" type="button"></button>
+              <button id="useKey" class="secondary" type="button">Usar llave</button>
+            </div>
           </section>
           <div class="actions shop">
             <button id="shopClose" class="secondary" type="button">Cerrar</button>
+          </div>
+        </div>
+      </div>
+      <div class="overlay" id="keyPanel" hidden>
+        <div class="intro">
+          <p class="eyebrow">Llave de práctica</p>
+          <h1>NIVEL<span>.</span></h1>
+          <p class="shop-label">Nivel</p>
+          <div class="mp-row key-levels" id="keyLevels"></div>
+          <p class="shop-label">Power-up inicial</p>
+          <div class="mp-row" id="keyPowers"></div>
+          <p class="shop-label">Vidas</p>
+          <div class="mp-row" id="keyHearts"></div>
+          <div class="actions">
+            <button id="keyStart" type="button" disabled>Entrar</button>
+            <button id="keyCancel" class="secondary" type="button">Cancelar</button>
           </div>
         </div>
       </div>
@@ -1439,6 +1487,7 @@
         cancelAnimationFrame(animationFrame);
         demo = false;
         resetGame();
+        if (practiceLevel) applyLoadout();
         overlay.hidden = true;
         deathOverlay.hidden = true;
         pauseOverlay.hidden = true;
@@ -1505,6 +1554,7 @@
 
       function showMenu() {
         stopRainSound();
+        practiceLevel = 0;
         updateCoinLabel();
         if (mp.channel) mpLeave();
         cancelAnimationFrame(animationFrame);
@@ -2400,11 +2450,12 @@
         hud.hidden = true;
         gearButton.hidden = true;
         const n = selectedLevel;
-        unlocked = Math.max(unlocked, Math.min(50, n + 1));
+        const practice = practiceLevel > 0;
+        if (!practice) unlocked = Math.max(unlocked, Math.min(50, n + 1));
         try { localStorage.setItem("car34-unlocked", String(unlocked)); } catch (error) { /* sin almacenamiento */ }
         buildLevelList();
         let rewardText = "";
-        if (!doneLevels.includes(n)) {
+        if (!practice && !doneLevels.includes(n)) {
           const reward = levelReward(n);
           coins += reward;
           doneLevels.push(n);
@@ -2413,7 +2464,7 @@
         }
         updateCoinLabel();
         document.querySelector("#levelText").textContent = `Nivel ${n} completado en ${Math.floor(distance)} m.${rewardText}`;
-        document.querySelector("#nextLevelButton").hidden = n >= 50;
+        document.querySelector("#nextLevelButton").hidden = practice || n >= 50;
         levelOverlay.hidden = false;
       }
 
@@ -2629,17 +2680,47 @@
         animationFrame = requestAnimationFrame(frame);
       }
 
-      const swatches = document.querySelector("#swatches");
-      function selectCarColor(index, save = true) {
-        carColor = carColors[index];
-        for (const [i, button] of [...swatches.children].entries()) {
-          button.setAttribute("aria-pressed", String(i === index));
+      // ===== Tienda: monedas, inventario, personalización y llaves de práctica =====
+      const KEY_PRICE = 50;
+      let owned = { models: ["auto"], colors: [0] };
+      try {
+        const saved = JSON.parse(localStorage.getItem("car34-owned") || "null");
+        if (saved && Array.isArray(saved.models) && Array.isArray(saved.colors)) {
+          owned = { models: saved.models.map(String), colors: saved.colors.map(Number) };
         }
+      } catch (error) { /* valores por defecto */ }
+      if (!owned.models.includes("auto")) owned.models.unshift("auto");
+      if (!owned.colors.includes(0)) owned.colors.unshift(0);
+      function saveOwned() {
+        try { localStorage.setItem("car34-owned", JSON.stringify(owned)); } catch (error) { /* sin almacenamiento */ }
+      }
+      let practiceKeys = 0;
+      try { practiceKeys = Number(localStorage.getItem("car34-practiceKeys") || 0) || 0; } catch (error) { practiceKeys = 0; }
+      function saveKeys() {
+        try { localStorage.setItem("car34-practiceKeys", String(practiceKeys)); } catch (error) { /* sin almacenamiento */ }
+      }
+      // Nivel de práctica activo: solo existe durante la sesión y desaparece al salir al menú
+      let practiceLevel = 0;
+      let loadout = { power: "none", hearts: 5 };
+      const powerChoices = [
+        { id: "none", name: "Ninguno" },
+        { id: "speed", name: "Rápido" },
+        { id: "high", name: "Salto alto" },
+        { id: "shield", name: "Escudo" },
+        { id: "double", name: "Doble salto" }
+      ];
+
+      const swatches = document.querySelector("#swatches");
+      let equippedColor = 0;
+      function selectCarColor(index, save = true) {
+        equippedColor = index;
+        carColor = carColors[index];
         if (save) {
           try { localStorage.setItem("car34-color", String(index)); } catch (error) { /* sin almacenamiento */ }
         }
         if (!running) draw();
       }
+      let shopColor = 0;
       carColors.forEach((color, index) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -2647,41 +2728,41 @@
         button.style.setProperty("--c", color.body);
         button.setAttribute("aria-label", `Carrito ${color.name}`);
         button.title = color.name;
-        button.addEventListener("click", () => { selectCarColor(index); renderPreviews(); });
+        button.addEventListener("click", () => { shopColor = index; renderShop(); });
         swatches.appendChild(button);
       });
-      let savedColor = 0;
-      try { savedColor = Number(localStorage.getItem("car34-color") || 0); } catch (error) { savedColor = 0; }
-      selectCarColor(carColors[savedColor] ? savedColor : 0, false);
+      const colorPrice = (index) => (index === 0 ? 0 : 15);
 
       const modelButtons = document.querySelector("#models");
       const carModels = [
-        { id: "auto", name: "Auto" },
-        { id: "camion", name: "Camión" },
-        { id: "camioneta", name: "Camioneta" },
-        { id: "moto", name: "Moto" }
+        { id: "auto", name: "Auto", price: 0 },
+        { id: "camion", name: "Camión", price: 50 },
+        { id: "camioneta", name: "Camioneta", price: 30 },
+        { id: "moto", name: "Moto", price: 35 }
       ];
-      function selectCarModel(index, save = true) {
-        carModel = carModels[index].id;
-        for (const [i, button] of [...modelButtons.children].entries()) {
-          button.setAttribute("aria-pressed", String(i === index));
-        }
-        if (save) {
-          try { localStorage.setItem("car34-model", String(index)); } catch (error) { /* sin almacenamiento */ }
-        }
-        if (!running) draw();
-      }
+      let shopModel = 0;
       carModels.forEach((model, index) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "model-chip";
         button.textContent = model.name;
-        button.addEventListener("click", () => { selectCarModel(index); renderPreviews(); });
+        button.addEventListener("click", () => { shopModel = index; renderShop(); });
         modelButtons.appendChild(button);
       });
+      function equipModel(id) {
+        const index = carModels.findIndex((m) => m.id === id);
+        if (index < 0) return;
+        carModel = id;
+        try { localStorage.setItem("car34-model", String(index)); } catch (error) { /* sin almacenamiento */ }
+        if (!running) draw();
+      }
       let savedModel = 0;
       try { savedModel = Number(localStorage.getItem("car34-model") || 0); } catch (error) { savedModel = 0; }
-      selectCarModel(carModels[savedModel] ? savedModel : 0, false);
+      const savedModelId = carModels[savedModel] ? carModels[savedModel].id : "auto";
+      equipModel(owned.models.includes(savedModelId) ? savedModelId : "auto");
+      let savedColor = 0;
+      try { savedColor = Number(localStorage.getItem("car34-color") || 0); } catch (error) { savedColor = 0; }
+      selectCarColor(owned.colors.includes(savedColor) ? savedColor : 0, false);
 
       const themeButtons = document.querySelector("#themes");
       const themeNames = [
@@ -2851,6 +2932,8 @@
       const shopPanel = document.querySelector("#shopPanel");
       const modelPreview = document.querySelector("#modelPreview");
       const colorPreview = document.querySelector("#colorPreview");
+      const custPreview = document.querySelector("#custPreview");
+      const keyPanel = document.querySelector("#keyPanel");
 
       // Dibuja el carrito actual en una vista previa usando el mismo código del juego
       function previewCar(target, model, color) {
@@ -2883,33 +2966,169 @@
         camera = savedCamera;
       }
 
-      function renderPreviews() {
-        previewCar(modelPreview, carModel, carColor);
-        previewCar(colorPreview, carModel, carColor);
+      function fillChips(container, items, selectedId, onPick, labelOf) {
+        container.innerHTML = "";
+        for (const item of items) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "model-chip";
+          b.textContent = labelOf(item);
+          b.setAttribute("aria-pressed", String(item.id === selectedId));
+          b.addEventListener("click", () => onPick(item));
+          container.appendChild(b);
+        }
       }
 
+      function renderShop() {
+        const model = carModels[shopModel];
+        for (const [i, b] of [...modelButtons.children].entries()) b.setAttribute("aria-pressed", String(i === shopModel));
+        for (const [i, b] of [...swatches.children].entries()) b.setAttribute("aria-pressed", String(i === shopColor));
+        previewCar(modelPreview, model.id, carColors[equippedColor]);
+        previewCar(colorPreview, carModel, carColors[shopColor]);
+        document.querySelector("#shopCoins").textContent = `● ${coins} monedas`;
+
+        // Compra de modelos y colores
+        const buyModel = document.querySelector("#buyModel");
+        const ownsModel = owned.models.includes(model.id);
+        buyModel.disabled = ownsModel || coins < model.price;
+        buyModel.textContent = ownsModel ? "Ya lo tienes" : (model.price ? `Comprar · ${model.price} monedas` : "Gratis");
+        const buyColor = document.querySelector("#buyColor");
+        const ownsColor = owned.colors.includes(shopColor);
+        const cPrice = colorPrice(shopColor);
+        buyColor.disabled = ownsColor || coins < cPrice;
+        buyColor.textContent = ownsColor ? "Ya lo tienes" : (cPrice ? `Comprar · ${cPrice} monedas` : "Gratis");
+
+        // Inventario
+        const invModels = document.querySelector("#invModels");
+        invModels.innerHTML = "";
+        for (const m of carModels.filter((x) => owned.models.includes(x.id))) {
+          const s = document.createElement("span");
+          s.className = "model-chip";
+          s.textContent = m.name;
+          invModels.appendChild(s);
+        }
+        const invColors = document.querySelector("#invColors");
+        invColors.innerHTML = "";
+        for (const idx of owned.colors) {
+          const s = document.createElement("span");
+          s.className = "swatch";
+          s.style.setProperty("--c", carColors[idx].body);
+          s.title = carColors[idx].name;
+          invColors.appendChild(s);
+        }
+        document.querySelector("#invKeys").textContent = `Llaves de práctica: ${practiceKeys}`;
+
+        // Personalizar: elegir lo que ya posees
+        previewCar(custPreview, carModel, carColor);
+        fillChips(document.querySelector("#custModels"), carModels.filter((x) => owned.models.includes(x.id)), carModel, (m) => { equipModel(m.id); renderShop(); }, (m) => m.name);
+        const custColors = document.querySelector("#custColors");
+        custColors.innerHTML = "";
+        for (const idx of owned.colors) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "swatch";
+          b.style.setProperty("--c", carColors[idx].body);
+          b.title = carColors[idx].name;
+          b.setAttribute("aria-pressed", String(idx === equippedColor));
+          b.addEventListener("click", () => { selectCarColor(idx); renderShop(); });
+          custColors.appendChild(b);
+        }
+
+        // Niveles: llaves de práctica
+        document.querySelector("#keyCount").textContent = `Tienes ${practiceKeys} llave${practiceKeys === 1 ? "" : "s"}.`;
+        document.querySelector("#buyKey").textContent = `Comprar llave · ${KEY_PRICE} monedas`;
+        document.querySelector("#buyKey").disabled = coins < KEY_PRICE;
+        document.querySelector("#useKey").disabled = practiceKeys < 1;
+        updateCoinLabel();
+      }
+
+      const tabIds = { models: "#tabModels", colors: "#tabColors", inventory: "#tabInventory", custom: "#tabCustom", levels: "#tabLevels" };
+      const sectionIds = { models: "#sectionModels", colors: "#sectionColors", inventory: "#sectionInventory", custom: "#sectionCustom", levels: "#sectionLevels" };
+      function showShopTab(which) {
+        for (const key of Object.keys(sectionIds)) {
+          document.querySelector(sectionIds[key]).hidden = key !== which;
+          document.querySelector(tabIds[key]).setAttribute("aria-pressed", String(key === which));
+        }
+        renderShop();
+      }
+      for (const key of Object.keys(tabIds)) {
+        document.querySelector(tabIds[key]).addEventListener("click", () => showShopTab(key));
+      }
       document.querySelector("#shopButton").addEventListener("click", () => {
         shopPanel.hidden = false;
         showShopTab("models");
       });
       document.querySelector("#shopClose").addEventListener("click", () => { shopPanel.hidden = true; });
 
-      const tabModels = document.querySelector("#tabModels");
-      const tabColors = document.querySelector("#tabColors");
-      const sectionModels = document.querySelector("#sectionModels");
-      const sectionColors = document.querySelector("#sectionColors");
+      document.querySelector("#buyModel").addEventListener("click", () => {
+        const model = carModels[shopModel];
+        if (owned.models.includes(model.id) || coins < model.price) return;
+        coins -= model.price;
+        owned.models.push(model.id);
+        saveOwned();
+        saveCoins();
+        renderShop();
+      });
+      document.querySelector("#buyColor").addEventListener("click", () => {
+        const price = colorPrice(shopColor);
+        if (owned.colors.includes(shopColor) || coins < price) return;
+        coins -= price;
+        owned.colors.push(shopColor);
+        saveOwned();
+        saveCoins();
+        renderShop();
+      });
+      document.querySelector("#buyKey").addEventListener("click", () => {
+        if (coins < KEY_PRICE) return;
+        coins -= KEY_PRICE;
+        practiceKeys += 1;
+        saveKeys();
+        saveCoins();
+        renderShop();
+      });
 
-      function showShopTab(which) {
-        const onModels = which === "models";
-        sectionModels.hidden = !onModels;
-        sectionColors.hidden = onModels;
-        tabModels.setAttribute("aria-pressed", String(onModels));
-        tabColors.setAttribute("aria-pressed", String(!onModels));
-        renderPreviews();
+      // Panel de la llave: nivel, power-up inicial y vidas
+      let keyLevel = 0;
+      let keyPower = "none";
+      let keyHearts = 5;
+      function renderKeyPanel() {
+        const levels = Array.from({ length: 50 }, (_, i) => ({ id: i + 1 }));
+        fillChips(document.querySelector("#keyLevels"), levels, keyLevel, (item) => { keyLevel = item.id; renderKeyPanel(); }, (item) => item.id);
+        fillChips(document.querySelector("#keyPowers"), powerChoices, keyPower, (item) => { keyPower = item.id; renderKeyPanel(); }, (item) => item.name);
+        const hearts = [1, 2, 3, 4, 5].map((n) => ({ id: n }));
+        fillChips(document.querySelector("#keyHearts"), hearts, keyHearts, (item) => { keyHearts = item.id; renderKeyPanel(); }, (item) => `${item.id} ♥`);
+        document.querySelector("#keyStart").disabled = keyLevel === 0 || practiceKeys < 1;
+      }
+      document.querySelector("#useKey").addEventListener("click", () => {
+        if (practiceKeys < 1) return;
+        shopPanel.hidden = true;
+        keyPanel.hidden = false;
+        renderKeyPanel();
+      });
+      document.querySelector("#keyCancel").addEventListener("click", () => {
+        keyPanel.hidden = true;
+        shopPanel.hidden = false;
+        renderShop();
+      });
+      document.querySelector("#keyStart").addEventListener("click", () => {
+        if (!keyLevel || practiceKeys < 1) return;
+        practiceKeys -= 1;
+        saveKeys();
+        loadout = { power: keyPower, hearts: keyHearts };
+        practiceLevel = keyLevel;
+        keyPanel.hidden = true;
+        irisTransition(() => {
+          selectLevel(keyLevel);
+          startGame();
+        });
+      });
+
+      // Al empezar un nivel de práctica se aplica la carga elegida
+      function applyLoadout() {
+        hearts = loadout.hearts;
+        if (loadout.power !== "none") grantPower(loadout.power);
       }
 
-      tabModels.addEventListener("click", () => showShopTab("models"));
-      tabColors.addEventListener("click", () => showShopTab("colors"));
       document.querySelector("#modeClose").addEventListener("click", () => { modePanel.hidden = true; });
       document.querySelector("#modeNormal").addEventListener("click", () => {
         modePanel.hidden = true;
